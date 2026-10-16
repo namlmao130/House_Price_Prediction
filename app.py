@@ -195,21 +195,21 @@ with tab2:
             step=0.5,
         )
 
-        if st.button("Dự đoán giá", type="primary"):
-            input_df = pd.DataFrame(
-                [
-                    {
-                        "area": float(area),
-                        "bedroom_count": float(bedroom_count),
-                        "bathroom_count": float(bathroom_count),
-                        "floor_count": float(floor_count),
-                        "frontage_width": float(frontage_width),
-                        "property_type_name": prop_type,
-                        "district_name": district,
-                        "ward_name": None if ward == "Không rõ" else ward,
-                    }
-                ]
-            )
+    if st.button("Dự đoán giá", type="primary"):
+        input_df = pd.DataFrame(
+            [
+                {
+                    "area": float(area),
+                    "bedroom_count": float(bedroom_count),
+                    "bathroom_count": float(bathroom_count),
+                    "floor_count": float(floor_count),
+                    "frontage_width": float(frontage_width),
+                    "property_type_name": prop_type,
+                    "district_name": district,
+                    "ward_name": None if ward == "Không rõ" else ward,
+                }
+            ]
+        )
 
         X_input = preprocessor.transform(input_df)
         pred = model.predict(X_input)[0]
