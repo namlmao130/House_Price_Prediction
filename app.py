@@ -15,14 +15,12 @@ from artifacts import load_artifacts
 from config import ARTIFACTS_DIR, MODEL_PATH, PREPROCESSOR_PATH
 from cleaning import deduplicate
 
-
 # Config
 st.set_page_config(
     page_title="Dự đoán Giá Nhà Hà Nội",
     page_icon=r"C:\Users\DELL\Downloads\page-icon.png",
     layout="wide",
 )
-
 
 
 # Load model & data
@@ -50,14 +48,12 @@ def load_data(sample_size=None) -> pd.DataFrame:
 if not MODEL_PATH.exists() or not PREPROCESSOR_PATH.exists():
     st.info("Chưa có model và preprocessor. Chạy python src/train_model.py trước.")
     st.stop()
-bundle = load_bundle(MODEL_PATH.stat().st_mtime_ns, PREPROCESSOR_PATH.stat().st_mtime_ns)
+bundle = load_bundle(
+    MODEL_PATH.stat().st_mtime_ns, PREPROCESSOR_PATH.stat().st_mtime_ns
+)
 model = bundle["model"]
 feature_cols = bundle["feature_cols"]
-if {"month", "year", "published_at"}.intersection(feature_cols):
-    st.warning(
-        "Mô hình cần được huấn luyện lại sau khi bỏ biến thời gian. Chạy python src/train_model.py trước khi dự đoán."
-    )
-    st.stop()
+preprocessor = bundle["preprocessor"]
 districts = bundle["districts"]  # {district_name: median_price_ty}
 ward_medians = bundle.get("ward_medians", {})
 wards_by_district = bundle.get("wards_by_district", {})
@@ -199,37 +195,23 @@ with tab2:
             step=0.5,
         )
 
-    if st.button("Dự đoán giá", type="primary"):
-        # ── Build input row ──
-        row = dict.fromkeys(feature_cols, 0)
+        if st.button("Dự đoán giá", type="primary"):
+            input_df = pd.DataFrame(
+                [
+                    {
+                        "area": float(area),
+                        "bedroom_count": float(bedroom_count),
+                        "bathroom_count": float(bathroom_count),
+                        "floor_count": float(floor_count),
+                        "frontage_width": float(frontage_width),
+                        "property_type_name": prop_type,
+                        "district_name": district,
+                        "ward_name": None if ward == "Không rõ" else ward,
+                    }
+                ]
+            )
 
-        # Numeric features
-        row["area"] = area
-        row["bedroom_count"] = bedroom_count
-        row["bathroom_count"] = bathroom_count
-        row["floor_count"] = float(floor_count)
-        row["frontage_width"] = frontage_width
-
-        # Target encoding
-        district_price = districts.get(district, global_median)
-        row["district_median_price"] = district_price
-        row["ward_median_price"] = (
-            district_price
-            if ward == "Không rõ"
-            else ward_medians.get((district, ward), district_price)
-        )
-
-        # One-hot: property_type_name
-        prop_col = f"property_type_name_{prop_type}"
-        if prop_col in row:
-            row[prop_col] = 1
-
-        # One-hot: district_name
-        dist_col = f"district_name_{district}"
-        if dist_col in row:
-            row[dist_col] = 1
-
-        X_input = pd.DataFrame([[row[c] for c in feature_cols]], columns=feature_cols)
+        X_input = preprocessor.transform(input_df)
         pred = model.predict(X_input)[0]
 
         # Cảnh báo quận lạ
