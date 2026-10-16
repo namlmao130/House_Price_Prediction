@@ -15,7 +15,6 @@ from config import (
     MISSING_INDICATOR_COLUMNS,
     N_SPLITS,
     NUMERIC_COLUMNS,
-    OUTLIER_QUANTILES,
     PRICE_UNIT,
     RANDOM_STATE,
 )
@@ -52,18 +51,6 @@ def fill_numeric_missing(X: pd.DataFrame, medians: dict) -> pd.DataFrame:
         filled[f"{column}_missing"] = numeric.isna().astype(int)
         filled[column] = numeric.fillna(medians[column])
     return filled
-
-
-def fit_outlier_bounds(X_train: pd.DataFrame, y_train: pd.Series) -> dict:
-    """Fit phân vị giá/diện tích từ train của lần chia hiện tại."""
-    return {
-        "price_ty": y_train.quantile(list(OUTLIER_QUANTILES)).tolist(),
-        "area": X_train["area"].quantile(list(OUTLIER_QUANTILES)).tolist(),
-    }
-
-
-def training_mask(X: pd.DataFrame, y: pd.Series, bounds: dict) -> pd.Series:
-    return X["area"].between(*bounds["area"]) & y.between(*bounds["price_ty"])
 
 
 def fit_target_statistics(X_train: pd.DataFrame, y_train: pd.Series) -> dict:
@@ -139,7 +126,7 @@ def make_oof_target_encoding(
 
 
 class HousePricePreprocessor:
-    """Giữ thống kê train; fit_transform trả (X OOF đã lọc, y đã align)."""
+    """Giữ thống kê train; fit_transform trả (X OOF, y đã align), giữ mọi dòng."""
 
     def __init__(
         self, n_splits: int = N_SPLITS, random_state: int = RANDOM_STATE,
@@ -167,13 +154,13 @@ class HousePricePreprocessor:
         groups_train = align_series(groups_train, X_train.index, "groups_train")
         self.numeric_medians_ = fit_numeric_imputer(X_train)
         filled_train = fill_numeric_missing(X_train, self.numeric_medians_)
-        self.outlier_bounds_ = fit_outlier_bounds(filled_train, y_train)
-        keep = training_mask(filled_train, y_train, self.outlier_bounds_)
-        retained = filled_train.loc[keep]
+        # Giữ key metadata cũ; không còn học bounds hoặc lọc phân vị.
+        self.outlier_bounds_ = None
+        retained = filled_train
         target = y_train.loc[retained.index]
         retained_groups = groups_train.loc[retained.index]
         if len(retained) < 2 or retained_groups.nunique() < 2:
-            raise ValueError("Cần ít nhất hai group train sau lọc ngoại lệ để tạo OOF.")
+            raise ValueError("Cần ít nhất hai group train để tạo OOF.")
         self.target_statistics_ = fit_target_statistics(retained, target)
         self.district_medians_ = self.target_statistics_["districts"]
         self.ward_medians_ = self.target_statistics_["ward_medians"]
@@ -221,7 +208,7 @@ class HousePricePreprocessor:
     def fit_transform(
         self, X_train: pd.DataFrame, y_train: pd.Series, groups_train: pd.Series,
     ) -> tuple[pd.DataFrame, pd.Series]:
-        """Fit train, lọc train, rồi tạo OOF; không encode train bằng nhãn chính nó."""
+        """Fit train rồi tạo OOF, giữ mọi dòng; không encode bằng nhãn chính nó."""
         retained, target, groups = self._fit(X_train, y_train, groups_train)
         encoded = make_oof_target_encoding(
             retained, target, groups, self.n_splits, self.random_state,
@@ -248,6 +235,7 @@ class HousePricePreprocessor:
             **self.target_statistics_,
             "numeric_medians": self.numeric_medians_,
             "outlier_bounds": self.outlier_bounds_,
+            "train_outlier_filter": "none",
             "categories": self.categories_,
             "feature_cols": self.feature_cols_,
             "wards_by_district": {

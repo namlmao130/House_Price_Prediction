@@ -84,6 +84,7 @@ def cross_validate(
             "train_rows_after_filter": len(X_fit),
             "validation_rows": len(valid_pos),
             "outlier_bounds": preprocessor.outlier_bounds_,
+            "train_outlier_filter": "none",
             "numeric_medians": preprocessor.numeric_medians_,
             "group_overlap": 0,
         })
@@ -145,6 +146,7 @@ def train_and_evaluate(
         "test_rows": len(X_test),
         "test_rows_removed_by_outlier_filter": 0,
         "test_outlier_filter": "none",
+        "train_outlier_filter": "none",
         "outlier_bounds": preprocessor.outlier_bounds_,
         "numeric_medians": preprocessor.numeric_medians_,
         "baseline_train_median_test_mae": baseline["mae"],

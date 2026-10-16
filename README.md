@@ -58,7 +58,7 @@ Mỗi lượt fit preprocessing thực hiện:
 
 ```text
 fit numeric median trên train → tạo missing indicators → fill train
-→ fit outlier bounds train → lọc train → học categories/statistics train
+→ học categories/statistics train, giữ mọi dòng
 → inner GroupKFold → tạo target encoding OOF cho train
 ```
 
@@ -74,12 +74,12 @@ from preprocessing import HousePricePreprocessor
 preprocessor = HousePricePreprocessor()
 X_fit, y_fit = preprocessor.fit_transform(X_train, y_train, groups_train)
 X_test_encoded = preprocessor.transform(X_test)
-model.fit(X_fit, y_fit)
-predictions = model.predict(X_test_encoded)
+model.fit(X_fit, np.log1p(y_fit))
+predictions = np.expm1(model.predict(X_test_encoded))
 ```
 
-`fit()` trả `self`. `fit_transform()` trả **(X đã lọc + OOF, y đã align)** vì
-lọc ngoại lệ thay đổi số dòng train; đây không phải sklearn TransformerMixin
+`fit()` trả `self`. `fit_transform()` trả **(X OOF, y đã align)** và giữ mọi dòng
+train đã qua cleaning/dedup; đây không phải sklearn TransformerMixin
 để ghép tùy ý vào Pipeline. Dữ liệu train phải dùng `fit_transform()` để nhận
 OOF. `transform()` dùng thống kê toàn train, dành cho validation/test và suy luận;
 không nhận y, không fit và không bỏ dòng.
@@ -93,7 +93,7 @@ giữ key cũ như `feature_cols`, `districts`, `numeric_medians`, `price_unit` 
 
 - Bắt buộc có giá, diện tích, quận và loại BĐS; giá và diện tích phải dương.
 - Bốn cột số tùy chọn được giữ NaN: phòng ngủ, phòng tắm, số tầng, mặt tiền.
-  Median học từ train trước lọc ngoại lệ; có bốn feature `*_missing`.
+  Median học từ train; có bốn feature `*_missing`.
 - Numeric âm bị loại nếu có giá trị. Inf/-inf chuyển thành missing ở cleaning.
 - Giữ heuristic `frontage_width <= area` nếu có mặt tiền; đây là quy tắc đồ án,
   không phải định luật so sánh mét với mét vuông.
@@ -107,7 +107,8 @@ giữ key cũ như `feature_cols`, `districts`, `numeric_medians`, `price_unit` 
   Đây là fingerprint, không phải ID bất động sản đã xác thực.
 - GroupShuffleSplit test 20% số group, seed 42; không nhất thiết 20% số tin thô.
 - GroupKFold 5 outer-fold; inner OOF dùng tối đa 5 fold, tối thiểu 2 group.
-- Outlier bounds theo phân vị 1%–99% của giá và diện tích, chỉ lọc train.
+- Không lọc phân vị giá/diện tích trong train, CV hoặc refit. Metadata giữ
+  `outlier_bounds = null`, `train_outlier_filter = "none"`; số dòng trước/sau bằng nhau.
 - Fallback giá phường → quận → global train. Quận/phường chưa gặp không gây lỗi.
 - One-hot quận và loại BĐS học danh mục từ train; unknown category cho dummy = 0.
 - Giữ Linear Regression + StandardScaler, Random Forest, Gradient Boosting và
@@ -117,8 +118,8 @@ Feature gồm 5 numeric, 4 missing indicators, 2 target encoding và one-hot.
 Không thêm `house_depth`, thời gian, `price` hay `price_per_m2` làm feature.
 Linear Regression, Random Forest và Gradient Boosting fit target `np.log1p(price_ty)`
 ở CV, train/test và refit. Dự đoán được đổi ngược bằng `np.expm1()` trước khi
-tính R²/MAE/RMSE, lưu dự đoán hoặc hiển thị trên app. Preprocessing, outlier
-bounds và OOF target encoding vẫn học từ giá gốc. Results và artifacts ghi
+tính R²/MAE/RMSE, lưu dự đoán hoặc hiển thị trên app. OOF target encoding
+vẫn học từ giá gốc. Results và artifacts ghi
 `target_transform = "log1p"`; cần train lại để tạo model sử dụng target mới.
 
 ## Kết quả và phiên bản

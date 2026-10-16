@@ -106,17 +106,23 @@ class PreprocessingTests(unittest.TestCase):
         assert_frame_equal(before[2], after[2])
         self.assertEqual(before[3].to_metadata(), after[3].to_metadata())
 
-    def test_train_outlier_filter_keeps_all_validation_rows(self):
+    def test_preprocessing_keeps_extreme_train_and_validation_rows(self):
         X = example_rows()
         y = pd.Series(np.linspace(2, 40, len(X)), index=X.index)
         X.loc[X.index[-1], "area"] = 1e9
         y.iloc[-1] = 1e12
+        X.loc[X.index[0], "area"] = 1e8
+        y.iloc[0] = 1e10
         train, target, valid, meta = prepare_cv_fold(X, y, np.arange(80), np.arange(80, 100))
-        self.assertLess(len(train), 80)
+        self.assertEqual(len(train), 80)
+        self.assertEqual(train.index.tolist(), X.index[:80].tolist())
+        assert_series_equal(target, y.iloc[:80])
+        self.assertEqual(train.iloc[0].area, 1e8)
         self.assertEqual(len(valid), 20)
         self.assertEqual(valid.index.tolist(), X.index[80:].tolist())
         self.assertEqual(valid.iloc[-1].area, 1e9)
-        self.assertEqual(meta.to_metadata()["outlier_bounds"]["price_ty"][1], y.iloc[:80].quantile(.99))
+        self.assertIsNone(meta.to_metadata()["outlier_bounds"])
+        self.assertEqual(meta.to_metadata()["train_outlier_filter"], "none")
         self.assertEqual(meta.to_metadata()["fit_rows_after_filter"], len(target))
 
     def test_ward_median_is_district_specific_and_missing_falls_back(self):
@@ -240,6 +246,11 @@ class PreprocessingTests(unittest.TestCase):
         self.assertEqual(validate.call_count, 1)
         self.assertEqual(len(evaluation.predictions), 20)
         self.assertEqual(evaluation.audit["test_rows_removed_by_outlier_filter"], 0)
+        self.assertEqual(evaluation.audit["train_rows_before_filter"], 100)
+        self.assertEqual(evaluation.audit["train_rows_after_filter"], 100)
+        for fold in evaluation.audit["folds"]:
+            self.assertEqual(fold["train_rows_before_filter"], fold["train_rows_after_filter"])
+            self.assertIsNone(fold["outlier_bounds"])
         self.assertTrue(np.isfinite(evaluation.metrics[evaluation.best_name]["test_mae"]))
         self.assertEqual(len(evaluation.fold_assignment.dropna()), 100)
         self.assertEqual(len(evaluation.metrics[evaluation.best_name]["fold_scores"]), 5)

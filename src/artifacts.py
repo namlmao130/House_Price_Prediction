@@ -118,7 +118,8 @@ def build_report(
             "largest_group_rows": int(groups.value_counts().max()),
             "train_test_group_overlap": 0,
             "cross_validation": (
-                "GroupKFold; independent train-only imputation/outlier/category fits; "
+                "GroupKFold; independent train-only imputation/category fits; "
+                "no percentile outlier filtering; "
                 "inner GroupKFold OOF for train target encoding; "
                 "validation uses outer-train statistics only"
             ),
@@ -130,6 +131,7 @@ def build_report(
             "fit_rows_before_filter": metadata["fit_rows_before_filter"],
             "fit_rows_after_filter": metadata["fit_rows_after_filter"],
             "outlier_bounds": metadata["outlier_bounds"],
+            "train_outlier_filter": metadata["train_outlier_filter"],
             "numeric_medians": metadata["numeric_medians"],
             "feature_cols": metadata["feature_cols"],
             "metrics_note": (
