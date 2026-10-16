@@ -1,0 +1,12 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.vscode/
+.streamlit/secrets.toml
+data/parquet_dataset/
+data/*.csv
+results/
+artifacts/
