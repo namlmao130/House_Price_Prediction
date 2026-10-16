@@ -20,7 +20,20 @@ import data_loader
 class RecordingModel:
     def predict(self, frame):
         self.last_input = frame.copy()
-        return np.array([float(frame["ward_median_price"].iloc[0])])
+        return np.log1p([float(frame["ward_median_price"].iloc[0])])
+
+
+class RecordingPreprocessor:
+    def transform(self, frame):
+        result = frame[["area"]].copy()
+        result["district_median_price"] = frame["district_name"].map({"A": 10., "B": 30.})
+        result["ward_median_price"] = [
+            {("A", "W1"): 14., ("B", "W2"): 35.}.get((district, ward), base)
+            for district, ward, base in zip(
+                frame["district_name"], frame["ward_name"], result["district_median_price"]
+            )
+        ]
+        return result
 
 
 class WardSelectionTests(unittest.TestCase):
@@ -28,6 +41,8 @@ class WardSelectionTests(unittest.TestCase):
         model = RecordingModel()
         bundle = {
             "model": model,
+            "preprocessor": RecordingPreprocessor(),
+            "target_transform": "log1p",
             "feature_cols": ["area", "district_median_price", "ward_median_price"],
             "districts": {"A": 10., "B": 30.},
             "ward_medians": {("A", "W1"): 14., ("B", "W2"): 35.},
@@ -64,10 +79,12 @@ class WardSelectionTests(unittest.TestCase):
             self.assertNotIn("month", model.last_input.columns)
             self.assertNotIn("year", model.last_input.columns)
             self.assertIn("Biên sai số tham khảo ± MAE", app.success[0].value)
+            self.assertIn("Giá dự đoán: 10.00 tỷ", app.success[0].value)
             app.selectbox[1].select("W1").run()
             app.button[0].click().run()
             self.assertFalse(app.exception)
             self.assertEqual(model.last_input["ward_median_price"].iloc[0], 14.)
+            self.assertIn("Giá dự đoán: 14.00 tỷ", app.success[0].value)
             app.selectbox[0].select("B").run()
             self.assertFalse(app.exception)
             self.assertEqual(app.selectbox[1].options, ["Không rõ", "W2"])

@@ -78,7 +78,7 @@ tab1, tab2, tab3 = st.tabs(["Tổng quan dữ liệu", "Dự đoán giá", "Đá
 # TAB 1: TỔNG QUAN
 with tab1:
     df = load_data(50000)
-
+    df = df[df["property_type_name"] != "Đất"].copy()
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Mẫu dữ liệu minh họa", f"{len(df):,}")
     col2.metric("Giá trung vị", f"{df['price_ty'].median():.1f} tỷ")
@@ -213,6 +213,8 @@ with tab2:
 
         X_input = preprocessor.transform(input_df)
         pred = model.predict(X_input)[0]
+        if bundle.get("target_transform") == "log1p":
+            pred = np.expm1(pred)
 
         # Cảnh báo quận lạ
         if district not in districts:

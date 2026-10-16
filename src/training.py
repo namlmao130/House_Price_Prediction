@@ -90,8 +90,8 @@ def cross_validate(
         # Chỉ giữ ma trận của một fold trong RAM, không giữ cả năm fold.
         for name, estimator in models.items():
             logger.info("CV %s: fold %s/%s", name, number, N_SPLITS)
-            model = clone(estimator).fit(X_fit, y_fit)
-            metrics = evaluate_regression(y_valid, model.predict(X_valid))
+            model = clone(estimator).fit(X_fit, np.log1p(y_fit))
+            metrics = evaluate_regression(y_valid, np.expm1(model.predict(X_valid)))
             scores[name].append(metrics)
             report_metrics(f"CV {name} fold {number}", metrics)
     summary = {
@@ -130,8 +130,8 @@ def train_and_evaluate(
     best_model = None
     for name, estimator in models.items():
         logger.info("Fit %s để đánh giá toàn bộ %s dòng test", name, len(y_test))
-        model = clone(estimator).fit(X_fit, y_fit)
-        predictions[name] = model.predict(X_test_encoded)
+        model = clone(estimator).fit(X_fit, np.log1p(y_fit))
+        predictions[name] = np.expm1(model.predict(X_test_encoded))
         metrics = evaluate_regression(y_test, predictions[name].to_numpy())
         summary[name].update({f"test_{key}": value for key, value in metrics.items()})
         report_metrics(f"Test {name}", metrics)
@@ -161,7 +161,7 @@ def refit_final_model(
     logger.info("Refit model triển khai: %s", best_name)
     preprocessor = HousePricePreprocessor()
     X_fit, y_fit = preprocessor.fit_transform(X, y, groups)
-    model = get_models()[best_name].fit(X_fit, y_fit)
+    model = get_models()[best_name].fit(X_fit, np.log1p(y_fit))
     return model, preprocessor
 
 

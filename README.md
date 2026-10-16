@@ -114,7 +114,12 @@ giữ key cũ như `feature_cols`, `districts`, `numeric_medians`, `price_unit` 
   toàn bộ hyperparameter. Chỉ Random Forest dùng `n_jobs=-1` như bản trước.
 
 Feature gồm 5 numeric, 4 missing indicators, 2 target encoding và one-hot.
-Không thêm `house_depth`, thời gian, `price`, `price_per_m2` hay log target.
+Không thêm `house_depth`, thời gian, `price` hay `price_per_m2` làm feature.
+Linear Regression, Random Forest và Gradient Boosting fit target `np.log1p(price_ty)`
+ở CV, train/test và refit. Dự đoán được đổi ngược bằng `np.expm1()` trước khi
+tính R²/MAE/RMSE, lưu dự đoán hoặc hiển thị trên app. Preprocessing, outlier
+bounds và OOF target encoding vẫn học từ giá gốc. Results và artifacts ghi
+`target_transform = "log1p"`; cần train lại để tạo model sử dụng target mới.
 
 ## Kết quả và phiên bản
 

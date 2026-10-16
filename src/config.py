@@ -16,6 +16,7 @@ N_SPLITS = 5
 OUTLIER_QUANTILES = (0.01, 0.99)
 PRICE_SCALE = 1_000_000_000
 PRICE_UNIT = "ty VND"
+TARGET_TRANSFORM = "log1p"
 
 IMPUTE_NUMERIC_COLUMNS = [
     "bedroom_count", "bathroom_count", "floor_count", "frontage_width",

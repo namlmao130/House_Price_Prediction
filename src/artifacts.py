@@ -16,7 +16,7 @@ import pyarrow
 import sklearn
 
 from config import DATA_DIR, DEDUP_GROUP_COLUMNS, N_SPLITS, PROJECT_ROOT
-from config import RANDOM_STATE, RESULTS_DIR, TEST_SIZE
+from config import RANDOM_STATE, RESULTS_DIR, TARGET_TRANSFORM, TEST_SIZE
 from data_loader import parquet_files
 from preprocessing import HousePricePreprocessor
 from training import EvaluationResult, get_feature_importance
@@ -84,6 +84,7 @@ def build_report(
     metadata = preprocessor.to_metadata()
     return {
         "schema_version": 4,
+        "target_transform": TARGET_TRANSFORM,
         "version_id": run.version_id,
         "run_id": run.run_dir.name,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -165,6 +166,7 @@ def save_artifacts(
         run.run_dir / "test_predictions.csv", index_label="source_row_index",
     )
     bundle = {
+        "target_transform": TARGET_TRANSFORM,
         "model": model, "preprocessor": preprocessor,
         "best_model_name": evaluation.best_name,
         "best_model_mae": evaluation.metrics[evaluation.best_name]["test_mae"],
@@ -173,6 +175,7 @@ def save_artifacts(
         "artifact_version": report, **preprocessor.to_metadata(),
     }
     evaluation_bundle = {
+        "target_transform": TARGET_TRANSFORM,
         "model": evaluation.model, "preprocessor": evaluation.preprocessor,
         **evaluation.preprocessor.to_metadata(),
     }
@@ -189,6 +192,7 @@ def save_artifacts(
                      if key not in {"preprocessor", *preprocessor.to_metadata()}}
     model_payload["version_id"] = run.version_id
     state_payload = {"preprocessor": preprocessor, "version_id": run.version_id,
+                     "target_transform": TARGET_TRANSFORM,
                      **preprocessor.to_metadata()}
     for filename, payload in [("model.pkl", model_payload),
                               ("preprocessor.pkl", state_payload)]:
