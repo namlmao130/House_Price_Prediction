@@ -87,10 +87,11 @@ class WardSelectionTests(unittest.TestCase):
         with patch.object(artifacts, "load_artifacts", return_value=bundle), \
              patch.object(config, "MODEL_PATH", ROOT / "README.md"), \
              patch.object(config, "PREPROCESSOR_PATH", ROOT / "README.md"), \
-             patch.object(data_loader, "load_raw_data", return_value=frame), \
+             patch.object(data_loader, "load_raw_data", return_value=frame) as load_data_mock, \
              patch.object(cleaning, "clean_listings", side_effect=lambda data: data):
             app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
             self.assertFalse(app.exception)
+            load_data_mock.assert_called_once_with()
             metric_table = next(item.value for item in app.dataframe
                                 if "Test MAPE (%)" in item.value.columns)
             self.assertEqual(metric_table.iloc[0]["Test MAPE (%)"], "15.00")

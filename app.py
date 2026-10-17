@@ -32,10 +32,8 @@ def load_bundle(model_modified_ns, preprocessor_modified_ns):
 
 @st.cache_data(show_spinner="Đang tải dữ liệu...", max_entries=2)
 def load_data(sample_size=None, data_modified_ns=()) -> pd.DataFrame:
-    # Lấy dư mẫu thô để sau cleaning/deduplicate vẫn đủ số dòng minh họa.
-    raw_sample_size = sample_size * 2 if sample_size is not None else None
-    df = load_raw_data(sample_size=raw_sample_size)
-
+    # Khử trùng trước khi lấy mẫu để mỗi tin duy nhất có cơ hội được chọn như nhau.
+    df = load_raw_data()
     df = clean_listings(df)
     df = deduplicate(df)
 
