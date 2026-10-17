@@ -70,6 +70,29 @@ class WardSelectionTests(unittest.TestCase):
                 "cv_mae": 2., "test_mae": 2., "cv_rmse": 3., "test_rmse": 3.,
                 "cv_mape": 12.5, "test_mape": 15.,
             }},
+            "artifact_version": {
+                "version_id": "test-version",
+                "created_at_utc": "2026-01-01T00:00:00+00:00",
+                "data": {
+                    "raw_rows": 120,
+                    "eligible_rows": 90,
+                    "rows_removed_by_fixed_checks": 30,
+                    "deduplicated_rows": 80,
+                    "duplicate_rows_removed": 10,
+                    "test_rows": 16,
+                    "data_entry_error_counts": {
+                        "price_non_positive": 4,
+                        "area_below_min": 2,
+                    },
+                },
+                "evaluation": {
+                    "train_rows_before_filter": 64,
+                    "test_rows": 16,
+                    "unique_groups": 80,
+                    "train_test_group_overlap": 0,
+                    "baseline_train_median_test_mae": 4.,
+                },
+            },
         }
         frame = pd.DataFrame({
             "area": [30., 40., 50., 60.],
@@ -103,13 +126,18 @@ class WardSelectionTests(unittest.TestCase):
             self.assertEqual(model.last_input["ward_median_price"].iloc[0], 10.)
             self.assertNotIn("month", model.last_input.columns)
             self.assertNotIn("year", model.last_input.columns)
-            self.assertIn("Biên sai số tham khảo ± MAE", app.success[0].value)
-            self.assertIn("Giá dự đoán: 10.00 tỷ", app.success[0].value)
+            self.assertIn("Giá ước tính: **10.00 tỷ VNĐ**", app.success[0].value)
+            self.assertTrue(any(
+                "MAPE 15.00%" in item.value for item in app.caption
+            ))
+            metric_values = {item.label: item.value for item in app.metric}
+            self.assertEqual(metric_values["Cận tham khảo dưới"], "8.50 tỷ")
+            self.assertEqual(metric_values["Cận tham khảo trên"], "11.50 tỷ")
             app.selectbox[1].select("W1").run()
             app.button[0].click().run()
             self.assertFalse(app.exception)
             self.assertEqual(model.last_input["ward_median_price"].iloc[0], 14.)
-            self.assertIn("Giá dự đoán: 14.00 tỷ", app.success[0].value)
+            self.assertIn("Giá ước tính: **14.00 tỷ VNĐ**", app.success[0].value)
             app.selectbox[0].select("B").run()
             self.assertFalse(app.exception)
             self.assertEqual(app.selectbox[1].options, ["Không rõ", "W2"])
@@ -138,7 +166,9 @@ class WardSelectionTests(unittest.TestCase):
                 self.assertFalse(app.exception)
                 self.assertFalse(app.success)
                 self.assertTrue(any("Chưa ước lượng được" in item.value for item in app.warning))
-                self.assertTrue(any("Giải thích chỉ số" in item.value for item in app.subheader))
+                self.assertTrue(any(
+                    "Dữ liệu và mô hình" in item.value for item in app.header
+                ))
         st.cache_resource.clear()
         st.cache_data.clear()
 

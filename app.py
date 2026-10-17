@@ -17,8 +17,8 @@ from cleaning import deduplicate
 
 # Config
 st.set_page_config(
-    page_title="Dự đoán Giá Nhà Hà Nội",
-    page_icon=r"C:\Users\DELL\Downloads\page-icon.png",
+    page_title="Dự đoán giá nhà Hà Nội",
+    page_icon=":material/home_work:",
     layout="wide",
 )
 
@@ -63,9 +63,10 @@ preprocessor = bundle["preprocessor"]
 districts = bundle["districts"]  # {district_name: median_price_ty}
 wards_by_district = bundle.get("wards_by_district", {})
 best_name = bundle["best_model_name"]
-best_mae = bundle["best_model_mae"]
 cv_summary = bundle.get("cv_summary", {})
 importance = bundle.get("feature_importance")
+best_metrics = cv_summary.get(best_name, {})
+best_mape = best_metrics.get("test_mape", best_metrics.get("cv_mape"))
 
 # Danh sách quận từ bundle
 district_list = sorted(districts.keys())
@@ -161,47 +162,66 @@ with tab1:
 
 # TAB 2: DỰ ĐOÁN
 with tab2:
-    st.subheader("Nhập thông tin căn nhà")
+    st.header("Định giá căn nhà", icon=":material/calculate:")
+    st.caption(
+        "Nhập đặc điểm bất động sản để nhận giá ước tính và khoảng tham khảo "
+        "theo sai số phần trăm của mô hình."
+    )
 
-    col1, col2 = st.columns(2)
+    with st.container(border=True):
+        st.subheader("Thông tin bất động sản")
+        col1, col2 = st.columns(2)
 
-    with col1:
-        district = st.selectbox("Quận/Huyện", district_list)
-        ward = st.selectbox(
-            "Phường/Xã",
-            ["Không rõ", *wards_by_district.get(district, [])],
-            key=f"ward_{district}",
-            help="Chọn “Không rõ” để dùng mức giá trung vị của quận/huyện.",
-        )
-        prop_type = st.selectbox(
-            "Loại BĐS",
-            ["Nhà", "Biệt thự/Nhà liền kề", "Shophouse", "Căn hộ chung cư"],
-        )
-        area = st.number_input(
-            "Diện tích (m²)", min_value=10.0, max_value=2500.0, value=60.0, step=5.0
+        with col1:
+            district = st.selectbox("Quận/huyện", district_list)
+            ward = st.selectbox(
+                "Phường/xã",
+                ["Không rõ", *wards_by_district.get(district, [])],
+                key=f"ward_{district}",
+                help="Chọn “Không rõ” để dùng mức giá trung vị của quận/huyện.",
+            )
+            prop_type = st.selectbox(
+                "Loại bất động sản",
+                ["Nhà", "Biệt thự/Nhà liền kề", "Shophouse", "Căn hộ chung cư"],
+            )
+            area = st.number_input(
+                "Diện tích (m²)",
+                min_value=10.0,
+                max_value=2500.0,
+                value=60.0,
+                step=5.0,
+            )
+
+        with col2:
+            bedroom_count = st.number_input(
+                "Số phòng ngủ", min_value=1, max_value=50, value=3, step=1
+            )
+            bathroom_count = st.number_input(
+                "Số phòng tắm", min_value=1, max_value=50, value=2, step=1
+            )
+            floor_count = st.number_input(
+                "Số tầng", min_value=1, max_value=30, value=3, step=1
+            )
+            frontage_width = st.number_input(
+                "Chiều rộng mặt tiền (m)",
+                min_value=1.0,
+                max_value=100.0,
+                value=4.0,
+                step=0.5,
+            )
+
+        predict_clicked = st.button(
+            "Dự đoán giá",
+            type="primary",
+            icon=":material/analytics:",
+            width="stretch",
         )
 
-    with col2:
-        bedroom_count = st.number_input(
-            "Số phòng ngủ", min_value=1, max_value=50, value=3, step=1
-        )
-        bathroom_count = st.number_input(
-            "Số phòng tắm", min_value=1, max_value=50, value=2, step=1
-        )
-        floor_count = st.number_input(
-            "Số tầng", min_value=1, max_value=30, value=3, step=1
-        )
-        frontage_width = st.number_input(
-            "Chiều rộng mặt tiền (m)",
-            min_value=1.0,
-            max_value=100.0,
-            value=4.0,
-            step=0.5,
-        )
-
-    predict_clicked = st.button("Dự đoán giá", type="primary")
     if predict_clicked and frontage_width > area:
-        st.warning("Chiều rộng mặt tiền không được lớn hơn diện tích.")
+        st.warning(
+            "Chiều rộng mặt tiền không được lớn hơn diện tích.",
+            icon=":material/warning:",
+        )
 
     if predict_clicked and frontage_width <= area:
         input_df = pd.DataFrame(
@@ -228,86 +248,259 @@ with tab2:
             st.warning(
                 "Chưa ước lượng được mức giá hợp lệ cho tổ hợp thông tin này. "
                 "Bạn có thể kiểm tra lại thông tin; nếu thông tin đã đúng, "
-                "mô hình hiện chưa đáp ứng trường hợp này."
+                "mô hình hiện chưa đáp ứng trường hợp này.",
+                icon=":material/warning:",
             )
         else:
-            lo = max(0, pred - best_mae)
-            hi = pred + best_mae
-            st.success(
-                f"Giá dự đoán: {pred:.2f} tỷ VNĐ\n\n"
-                f"Biên sai số tham khảo ± MAE: {lo:.2f} – {hi:.2f} tỷ VNĐ"
-            )
-            st.caption(
-                "Biên này không phải khoảng tin cậy và không bảo đảm mức bao phủ 90% hay 95%."
-            )
-            col_r1, col_r2, col_r3 = st.columns(3)
-            col_r1.metric("Dự đoán", f"{pred:.2f} tỷ")
-            col_r2.metric("Cận tham khảo dưới", f"{lo:.2f} tỷ")
-            col_r3.metric("Cận tham khảo trên", f"{hi:.2f} tỷ")
-            st.info(
-                f"Model sử dụng: {best_name} | MAE = {best_mae:.2f} tỷ VNĐ"
-                f"(≈ {best_mae*1000:.0f} triệu VNĐ)"
-            )
+            with st.container(border=True):
+                st.subheader("Kết quả định giá", icon=":material/home_work:")
+                st.success(
+                    f"Giá ước tính: **{pred:.2f} tỷ VNĐ**",
+                    icon=":material/check_circle:",
+                )
+
+                if best_mape is not None and np.isfinite(best_mape):
+                    error_rate = best_mape / 100
+                    lo = max(0, pred * (1 - error_rate))
+                    hi = pred * (1 + error_rate)
+                    col_r1, col_r2, col_r3 = st.columns(3)
+                    col_r1.metric(
+                        "Giá dự đoán", f"{pred:.2f} tỷ", border=True
+                    )
+                    col_r2.metric(
+                        "Cận tham khảo dưới", f"{lo:.2f} tỷ", border=True
+                    )
+                    col_r3.metric(
+                        "Cận tham khảo trên", f"{hi:.2f} tỷ", border=True
+                    )
+                    st.caption(
+                        f"Khoảng tham khảo được quy đổi theo MAPE {best_mape:.2f}% "
+                        f"của {best_name}. Đây không phải khoảng tin cậy và không "
+                        "bảo đảm một mức bao phủ xác suất cụ thể."
+                    )
+                else:
+                    st.caption(
+                        f"Mô hình sử dụng: {best_name}. Artifact hiện chưa có MAPE "
+                        "để tính khoảng tham khảo."
+                    )
 
 
 # TAB 3: ĐÁNH GIÁ MÔ HÌNH
 with tab3:
-    st.subheader("So sánh hiệu quả các mô hình (5-Fold CV)")
     artifact_version = bundle.get("artifact_version", {})
+    data_report = artifact_version.get("data", {})
+    evaluation_report = artifact_version.get("evaluation", {})
+
+    st.header("Dữ liệu và mô hình", icon=":material/model_training:")
+    st.caption(
+        "Toàn bộ các bước lọc, chuẩn hóa, tạo đặc trưng và đánh giá trước khi "
+        "mô hình được dùng để dự đoán."
+    )
+
     if artifact_version:
         st.caption(
             f"Phiên bản kết quả: {artifact_version['version_id']} | "
             f"Ngày lưu (UTC): {artifact_version['created_at_utc']}"
         )
 
+    if data_report:
+        raw_rows = data_report.get("raw_rows", 0)
+        eligible_rows = data_report.get("eligible_rows", 0)
+        deduplicated_rows = data_report.get("deduplicated_rows", eligible_rows)
+        removed_rows = data_report.get(
+            "rows_removed_by_fixed_checks", max(0, raw_rows - eligible_rows)
+        )
+        duplicate_rows = data_report.get(
+            "duplicate_rows_removed", max(0, eligible_rows - deduplicated_rows)
+        )
+        test_rows = data_report.get("test_rows", evaluation_report.get("test_rows", 0))
+
+        st.subheader(
+            f"Từ {raw_rows:,} tin thô đến {deduplicated_rows:,} mẫu sạch",
+            icon=":material/filter_alt:",
+        )
+        kpi_cols = st.columns(4)
+        kpi_cols[0].metric("Tin thô", f"{raw_rows:,}", border=True)
+        kpi_cols[1].metric(
+            "Sau kiểm tra hợp lệ",
+            f"{eligible_rows:,}",
+            f"-{removed_rows:,} dòng",
+            delta_color="inverse",
+            border=True,
+        )
+        kpi_cols[2].metric(
+            "Sau khử trùng",
+            f"{deduplicated_rows:,}",
+            f"-{duplicate_rows:,} dòng trùng",
+            delta_color="inverse",
+            border=True,
+        )
+        kpi_cols[3].metric("Tập kiểm tra", f"{test_rows:,}", border=True)
+
+        with st.container(border=True):
+            st.subheader("Những dữ liệu đã lọc bỏ")
+            st.markdown(
+                "- Thiếu **giá, diện tích, quận/huyện hoặc loại bất động sản**.\n"
+                "- Loại bất động sản là **Đất** sau khi chuẩn hóa chữ.\n"
+                "- Giá hoặc diện tích không dương; giá trị số tùy chọn âm.\n"
+                "- Vi phạm các ngưỡng cố định trong bảng dưới đây.\n"
+                "- Bản ghi trùng theo đặc trưng, vị trí, loại bất động sản và giá."
+            )
+
+            rule_names = {
+                "price_non_positive": "Giá không dương",
+                "price_above_10000_ty": "Giá trên 10.000 tỷ",
+                "area_below_min": "Diện tích dưới 10 m²",
+                "area_above_max": "Diện tích trên 2.500 m²",
+                "bedroom_count_outside_bounds": "Phòng ngủ ngoài khoảng 1–50",
+                "bathroom_count_outside_bounds": "Phòng tắm ngoài khoảng 1–50",
+                "floor_count_outside_bounds": "Số tầng ngoài khoảng 1–30",
+                "frontage_width_outside_bounds": "Mặt tiền ngoài khoảng 1–100 m",
+                "frontage_width_above_area": "Mặt tiền lớn hơn diện tích",
+                "price_per_m2_below_min": "Đơn giá dưới 3 triệu/m²",
+                "price_per_m2_above_max": "Đơn giá trên 4 tỷ/m²",
+            }
+            error_counts = data_report.get("data_entry_error_counts", {})
+            rule_rows = [
+                {"Quy tắc gắn cờ": rule_names.get(key, key), "Số dòng": count}
+                for key, count in error_counts.items()
+                if count
+            ]
+            if rule_rows:
+                st.dataframe(
+                    pd.DataFrame(rule_rows),
+                    hide_index=True,
+                    column_config={
+                        "Số dòng": st.column_config.NumberColumn(format="%d")
+                    },
+                    alt="Số dòng bị gắn cờ theo từng quy tắc làm sạch",
+                )
+                st.caption(
+                    "Một dòng có thể vi phạm nhiều quy tắc, vì vậy không cộng "
+                    "trực tiếp các số trong bảng để suy ra tổng số dòng bị loại."
+                )
+
+        process_col, feature_col = st.columns(2)
+        with process_col.container(border=True, height="stretch"):
+            st.subheader("Đã sửa và chuẩn hóa")
+            st.markdown(
+                "- Chuyển các cột số về kiểu số; `Inf/-Inf` thành giá trị thiếu.\n"
+                "- Chuẩn hóa Unicode NFKC, khoảng trắng và chuỗi rỗng.\n"
+                "- Giữ giá trị thiếu ở phòng ngủ, phòng tắm, số tầng và mặt tiền.\n"
+                "- Điền thiếu bằng trung vị học riêng từ tập train.\n"
+                "- Tạo thêm cờ thiếu dữ liệu cho bốn trường số tùy chọn."
+            )
+
+        with feature_col.container(border=True, height="stretch"):
+            st.subheader("Đã tính toán và tạo đặc trưng")
+            st.markdown(
+                "- Quy đổi giá sang **tỷ VNĐ** và tính đơn giá/m² để kiểm tra dữ liệu.\n"
+                "- Target encoding ngoài-fold cho quận và phường.\n"
+                "- One-hot encoding cho quận và loại bất động sản.\n"
+                "- Huấn luyện trên `log1p(giá)` và đổi ngược bằng `expm1`.\n"
+                "- Không dùng ngày đăng, giá hoặc đơn giá/m² làm feature đầu vào."
+            )
+
+        with st.container(border=True):
+            st.subheader("Chia dữ liệu và chống rò rỉ")
+            train_rows = evaluation_report.get("train_rows_before_filter", 0)
+            unique_groups = evaluation_report.get("unique_groups", deduplicated_rows)
+            group_overlap = evaluation_report.get("train_test_group_overlap", 0)
+            split_cols = st.columns(4)
+            split_cols[0].metric("Mẫu train", f"{train_rows:,}")
+            split_cols[1].metric("Mẫu test", f"{test_rows:,}")
+            split_cols[2].metric("Số group", f"{unique_groups:,}")
+            split_cols[3].metric("Group trùng train/test", f"{group_overlap:,}")
+            st.markdown(
+                "Dữ liệu được chia bằng **GroupShuffleSplit 80/20**; đánh giá chéo "
+                "dùng **5-fold GroupKFold**. Mỗi fold fit lại imputation, danh mục "
+                "và target encoding chỉ từ phần train của fold."
+            )
+
+    st.subheader("Hiệu quả mô hình", icon=":material/query_stats:")
+
     if cv_summary:
+        selected = cv_summary[best_name]
+        baseline_mae = evaluation_report.get("baseline_train_median_test_mae")
+        improvement = None
+        if baseline_mae and baseline_mae > 0:
+            improvement = (1 - selected["test_mae"] / baseline_mae) * 100
+
+        score_cols = st.columns(4)
+        score_cols[0].metric(
+            "Test R²", f"{selected['test_r2']:.3f}", border=True
+        )
+        score_cols[1].metric(
+            "Test MAPE", f"{selected['test_mape']:.2f}%", border=True
+        )
+        score_cols[2].metric(
+            "Test MAE", f"{selected['test_mae']:.2f} tỷ", border=True
+        )
+        score_cols[3].metric(
+            "Tốt hơn baseline",
+            f"{improvement:.1f}%" if improvement is not None else "—",
+            border=True,
+        )
+
         rows = []
         for name, metrics in cv_summary.items():
             rows.append(
                 {
                     "Mô hình": name,
-                    "Test R²": f"{metrics['test_r2']:.3f}",
+                    "Trạng thái": "Đang dùng" if name == best_name else "Đối chiếu",
                     "CV R² (mean)": f"{metrics['cv_r2_mean']:.3f}",
                     "CV R² (std)": f"±{metrics['cv_r2_std']:.3f}",
                     "CV MAE (tỷ)": f"{metrics['cv_mae']:.3f}",
-                    "Test MAE (tỷ)": f"{metrics['test_mae']:.3f}",
-                    "CV RMSE (tỷ)": f"{metrics['cv_rmse']:.3f}" if "cv_rmse" in metrics else "—",
-                    "Test RMSE (tỷ)": f"{metrics['test_rmse']:.3f}" if "test_rmse" in metrics else "—",
-                    "CV MAPE (%)": f"{metrics['cv_mape']:.2f}" if "cv_mape" in metrics else "—",
-                    "Test MAPE (%)": f"{metrics['test_mape']:.2f}" if "test_mape" in metrics else "—",
-                    "Best": "✅" if name == best_name else "",
+                    "CV MAPE (%)": f"{metrics['cv_mape']:.2f}",
+                    "Test R²": f"{metrics['test_r2']:.3f}",
+                    "Test MAPE (%)": f"{metrics['test_mape']:.2f}",
                 }
             )
-        st.dataframe(pd.DataFrame(rows))
+        rows.sort(key=lambda row: row["Trạng thái"] != "Đang dùng")
+        st.dataframe(
+            pd.DataFrame(rows),
+            hide_index=True,
+            alt="So sánh kết quả đánh giá chéo và tập kiểm tra của các mô hình",
+        )
+        st.caption(
+            "Mô hình được chọn bằng CV trên tập train; tập test chỉ dùng để báo "
+            "cáo kết quả cuối cùng."
+        )
     else:
         st.info("Chưa có dữ liệu CV (model cũ). Train lại để xem.")
 
-    st.divider()
-
     if importance is not None:
-        st.subheader(f"Top 20 Feature Importance — {best_name}")
+        st.subheader(
+            f"20 đặc trưng ảnh hưởng nhiều nhất — {best_name}",
+            icon=":material/bar_chart:",
+        )
         top20 = importance.head(20).reset_index()
-        top20.columns = ["Feature", "Importance"]
+        top20.columns = ["Đặc trưng", "Mức ảnh hưởng"]
         fig_imp = px.bar(
             top20,
-            x="Importance",
-            y="Feature",
+            x="Mức ảnh hưởng",
+            y="Đặc trưng",
             orientation="h",
-            color="Importance",
-            color_continuous_scale="Viridis",
+            color="Mức ảnh hưởng",
+            color_continuous_scale="Blues",
         )
-        fig_imp.update_layout(height=500, coloraxis_showscale=False)
-        st.plotly_chart(fig_imp)
+        fig_imp.update_layout(
+            height=540,
+            coloraxis_showscale=False,
+            yaxis={"categoryorder": "total ascending"},
+        )
+        st.plotly_chart(
+            fig_imp,
+            alt="Mức ảnh hưởng của 20 đặc trưng quan trọng nhất",
+        )
 
-    st.divider()
-    st.subheader("Giải thích chỉ số")
-    st.markdown("""
+    with st.expander("Giải thích các chỉ số", icon=":material/info:"):
+        st.markdown("""
 | Chỉ số | Ý nghĩa |
 |---|---|
 | **Test R²** | Hệ số xác định trên tập test; càng cao càng tốt và có thể âm nếu mô hình kém hơn dự đoán bằng giá trị trung bình |
 | **CV R²** | R² trung bình qua 5 fold — đánh giá độ ổn định của model |
 | **CV R² std** | Độ lệch chuẩn R² qua các fold — thấp = model ổn định |
 | **MAE (tỷ VNĐ)** | Sai số tuyệt đối trung bình (Mean Absolute Error) |
-| **RMSE (tỷ VNĐ)** | Căn sai số bình phương trung bình, nhạy với sai số lớn |
 | **MAPE (%)** | Sai số phần trăm tuyệt đối trung bình trên giá gốc; càng thấp càng tốt, có thể vượt 100% và nhạy với giá thật rất nhỏ |
 """)
