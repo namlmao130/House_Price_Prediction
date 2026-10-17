@@ -17,6 +17,7 @@ streamlit run app.py
 Đặt đủ `shard_0000.parquet` đến `shard_0009.parquet` trong
 `data/parquet_dataset/`. Loader lọc Hà Nội ngay trong PyArrow và chỉ đọc 10 cột
 cần dùng. Không tự tải dữ liệu hoặc thêm feature.
+Repo ko bao gồm file data vì quá nặng, nếu muốn train lại -> data -> link download
 
 ## Cấu trúc
 
