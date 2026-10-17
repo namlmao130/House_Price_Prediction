@@ -1,6 +1,6 @@
 # Dự đoán giá nhà Hà Nội — dữ liệu 2025–2026
 
-Dự đoán **giá chào bán**, đơn vị tỷ VNĐ. Ngày đăng chỉ mô tả dữ liệu; không
+Dự đoán **giá chào bán**. Ngày đăng chỉ mô tả dữ liệu; không
 dùng làm feature và không đánh giá theo thời gian.
 
 ## Chạy project
