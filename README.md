@@ -37,7 +37,7 @@ src/
   cleaning.py             Chuẩn hóa, kiểm tra lỗi và deduplicate
   splitting.py            Group key, chia group, tạo X/y
   preprocessing.py        HousePricePreprocessor và các phép biến đổi
-  evaluation.py           R², MAE, RMSE, MAPE và định dạng log metric
+  evaluation.py           Metric tổng thể, thang log và sai số theo phân khúc
   training.py             CV, chọn model, test evaluation, final refit
   artifacts.py            Hash, snapshot source, lưu model/state/kết quả
   validation.py           Kiểm tra schema và align index
@@ -116,12 +116,13 @@ giữ key cũ như `feature_cols`, `districts`, `numeric_medians`, `price_unit` 
   `outlier_bounds = null`, `train_outlier_filter = "none"`; số dòng trước/sau bằng nhau.
 - Fallback giá phường → quận → global train. Quận/phường chưa gặp không gây lỗi.
 - One-hot quận và loại BĐS học danh mục từ train; unknown category cho dummy = 0.
-- Giữ Linear Regression + StandardScaler, Random Forest, Gradient Boosting và
-  toàn bộ hyperparameter. Chỉ Random Forest dùng `n_jobs=-1` như bản trước.
+- Dùng Ridge Regression với `log1p` cho 5 feature số, StandardScaler và RidgeCV;
+  Random Forest và Gradient Boosting giữ nguyên feature. RidgeCV chọn alpha nội
+  bộ trên từng phần train, không nhìn tập test. Chỉ Random Forest dùng `n_jobs=-1`.
 
 Feature gồm 5 numeric, 4 missing indicators, 2 target encoding và one-hot.
 Không thêm `house_depth`, thời gian, `price` hay `price_per_m2` làm feature.
-Linear Regression, Random Forest và Gradient Boosting fit target `np.log1p(price_ty)`
+Ridge Regression, Random Forest và Gradient Boosting fit target `np.log1p(price_ty)`
 ở CV, train/test và refit. Dự đoán được đổi ngược bằng `np.expm1()` trước khi
 tính R²/MAE/RMSE/MAPE, lưu dự đoán hoặc hiển thị trên app. OOF target encoding
 vẫn học từ giá gốc. Results và artifacts ghi
@@ -133,12 +134,14 @@ R² có thể âm, không phải phần trăm chính xác. MAE/RMSE có đơn v�
 MAPE = `100 * mean(abs((y_true - y_pred) / y_true))`, lưu theo phần trăm
 trong `fold_scores.mape`, `cv_mape` (trung bình các fold) và `test_mape`.
 Giá thật phải dương; giá rất nhỏ có thể khiến MAPE cao, không clip hoặc bỏ mẫu.
+Ngoài ra pipeline báo Median APE, tỷ lệ lệch không quá 10%/20%, bias,
+R²/RMSLE trên thang log và sai số theo khoảng giá, loại BĐS, quận/huyện.
 Chọn model bằng
 CV R² trung bình trước khi đánh giá test; kết quả test không chọn model.
 
 Model triển khai được refit sau đánh giá trên toàn bộ dữ liệu khử trùng.
-R²/MAE/RMSE/MAPE báo cáo thuộc model chỉ fit trên tập train của thí nghiệm; không
-đánh giá lại test bằng model triển khai. Biên ± MAE trên app chỉ tham khảo,
+Các metric báo cáo thuộc model chỉ fit trên tập train của thí nghiệm; không
+đánh giá lại test bằng model triển khai. Biên theo MAPE trên app chỉ tham khảo,
 không bảo đảm mức bao phủ như khoảng tin cậy.
 
 Mỗi run lưu source, metadata, split assignment, dự đoán test, model đánh giá và
@@ -163,6 +166,7 @@ phiên bản nào; chạy lệnh train ở trên để tạo artifact từ code 
 - `results/evaluation.csv`: giá thật và dự đoán từng model trên test.
 - `results/runs/<version>/`: snapshot source, split và bundle để tái lập; chỉ giữ run mới nhất.
 - Dữ liệu, artifacts và results được giữ local, không track Git.
-- Metric gồm MAE, RMSE, R² và MAPE (%), tính trên giá gốc sau `expm1()`.
+- Metric chính tính trên giá gốc sau `expm1()`; R² log và RMSLE tính trên
+  `log1p(giá)`. Tab đánh giá còn hiển thị sai số theo phân khúc khi artifact mới có dữ liệu.
 
 Chạy train từ thư mục project: `venv\Scripts\python.exe src\train_model.py`.

@@ -1,8 +1,8 @@
 [theme]
 base = "light"
 primaryColor = "#1D4ED8"
-backgroundColor = "#F8FAFC"
-secondaryBackgroundColor = "#EEF2F6"
+backgroundColor = "#fdfdfd"
+secondaryBackgroundColor = "#b6c8d9"
 textColor = "#172033"
 font = "sans-serif"
 headingFont = "sans-serif"
@@ -10,8 +10,8 @@ baseFontSize = 15
 baseRadius = "0.75rem"
 buttonRadius = "0.75rem"
 showWidgetBorder = true
-borderColor = "#CBD5E1"
-dataframeHeaderBackgroundColor = "#E2E8F0"
+borderColor = "#4989d8"
+dataframeHeaderBackgroundColor = "#f7f7f7"
 dataframeHeaderTextColor = "#172033"
 chartCategoricalColors = ["#1D4ED8", "#0F766E", "#D97706", "#7C3AED", "#DC2626", "#475569"]
 paddingTop = "1.25rem"

@@ -7,17 +7,35 @@ import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import RidgeCV
 from sklearn.model_selection import GroupKFold
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from config import N_SPLITS, RANDOM_STATE
-from evaluation import evaluate_regression, report_metrics
+from evaluation import (
+    evaluate_by_price_band, evaluate_by_segment, evaluate_regression, report_metrics,
+)
 from preprocessing import HousePricePreprocessor
 from validation import align_series, align_target, ensure_disjoint_groups
 
 logger = logging.getLogger(__name__)
+
+LOG_FEATURE_COLUMNS = [
+    "area", "bedroom_count", "bathroom_count", "floor_count", "frontage_width",
+]
+
+
+def log_numeric_columns(X: pd.DataFrame) -> pd.DataFrame:
+    """Log1p các feature số nhưng giữ nguyên schema và thứ tự cột."""
+    transformed = X.copy()
+    transformed[LOG_FEATURE_COLUMNS] = np.log1p(transformed[LOG_FEATURE_COLUMNS])
+    return transformed
+
+
+CV_EXTRA_METRICS = (
+    "median_ape", "hit_rate_10", "hit_rate_20", "bias", "r2_log", "rmsle",
+)
 
 
 @dataclass
@@ -34,10 +52,12 @@ class EvaluationResult:
 
 
 def get_models() -> dict:
-    """Giữ nguyên estimator và hyperparameter; chỉ RF dùng nhiều lõi như trước."""
+    """Tạo ba mô hình ứng viên; chỉ Ridge dùng log1p cho feature số."""
     return {
-        "Linear Regression": Pipeline([
-            ("scaler", StandardScaler()), ("model", LinearRegression()),
+        "Ridge Regression": Pipeline([
+            ("log", FunctionTransformer(log_numeric_columns)),
+            ("scaler", StandardScaler()),
+            ("model", RidgeCV(alphas=np.logspace(-2, 3, 12))),
         ]),
         "Random Forest": RandomForestRegressor(
             n_estimators=200, max_depth=12, min_samples_leaf=5,
@@ -102,6 +122,10 @@ def cross_validate(
             "cv_mae": float(np.mean([score["mae"] for score in fold_scores])),
             "cv_rmse": float(np.mean([score["rmse"] for score in fold_scores])),
             "cv_mape": float(np.mean([score["mape"] for score in fold_scores])),
+            **{
+                f"cv_{key}": float(np.mean([score[key] for score in fold_scores]))
+                for key in CV_EXTRA_METRICS
+            },
             "fold_scores": fold_scores,
         }
         for name, fold_scores in scores.items()
@@ -139,6 +163,16 @@ def train_and_evaluate(
         report_metrics(f"Test {name}", metrics)
         if name == best_name:
             best_model = model
+    best_predictions = predictions[best_name].to_numpy()
+    segment_metrics = {
+        "price_band": evaluate_by_price_band(y_test, best_predictions),
+        "property_type": evaluate_by_segment(
+            y_test, best_predictions, X_test["property_type_name"],
+        ),
+        "district": evaluate_by_segment(
+            y_test, best_predictions, X_test["district_name"],
+        ),
+    }
     baseline = evaluate_regression(y_test, np.full(len(y_test), float(y_train.median())))
     audit = {
         "folds": folds,
@@ -151,6 +185,9 @@ def train_and_evaluate(
         "outlier_bounds": preprocessor.outlier_bounds_,
         "numeric_medians": preprocessor.numeric_medians_,
         "baseline_train_median_test_mae": baseline["mae"],
+        "baseline_train_median_test_median_ape": baseline["median_ape"],
+        "segment_metrics_model": best_name,
+        "segment_metrics": segment_metrics,
     }
     return EvaluationResult(
         best_name, summary, audit, predictions, assignment, best_model, preprocessor,

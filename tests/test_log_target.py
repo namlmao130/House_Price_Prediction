@@ -56,6 +56,12 @@ class LogTargetTests(unittest.TestCase):
                 self.assertAlmostEqual(self.result.metrics[name][f"test_{metric}"], value)
         self.assertGreater(prep.global_median_price_, float(np.log1p(y_fit).median()))
 
+    def test_linear_baseline_is_replaced_by_regularized_ridge(self):
+        self.assertNotIn("Linear Regression", self.models)
+        ridge = self.models["Ridge Regression"]
+        self.assertIn("log", ridge.named_steps)
+        self.assertGreater(len(ridge.named_steps["model"].alphas), 1)
+
     def test_cv_metrics_on_original_scale(self):
         splitter = GroupKFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
         train, valid = next(splitter.split(self.X.iloc[:80], groups=self.groups.iloc[:80]))

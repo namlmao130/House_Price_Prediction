@@ -442,20 +442,48 @@ with tab3:
             border=True,
         )
 
+        if "test_median_ape" in selected:
+            extra_cols = st.columns(4)
+            extra_cols[0].metric(
+                "Sai lệch trung vị (Median APE)",
+                f"{selected['test_median_ape']:.2f}%",
+                border=True, help="Median APE: một nửa dự đoán lệch ít hơn mức này.",
+            )
+            extra_cols[1].metric(
+                "Dự đoán lệch ≤ 10%",
+                f"{selected['test_hit_rate_10'] * 100:.1f}%", border=True,
+            )
+            extra_cols[2].metric(
+                "Dự đoán lệch ≤ 20%",
+                f"{selected['test_hit_rate_20'] * 100:.1f}%", border=True,
+            )
+            extra_cols[3].metric(
+                "R² trên thang log", f"{selected['test_r2_log']:.3f}",
+                border=True, help="R² tính trên log1p(giá), cùng thang huấn luyện.",
+            )
+        else:
+            st.info(
+                "Artifact hiện tại chưa có metric mở rộng và sai số theo nhóm. "
+                "Chạy lại `python src/train_model.py` để tạo."
+            )
+
         rows = []
         for name, metrics in cv_summary.items():
-            rows.append(
-                {
-                    "Mô hình": name,
-                    "Trạng thái": "Đang dùng" if name == best_name else "Đối chiếu",
-                    "CV R² (mean)": f"{metrics['cv_r2_mean']:.3f}",
-                    "CV R² (std)": f"±{metrics['cv_r2_std']:.3f}",
-                    "CV MAE (tỷ)": f"{metrics['cv_mae']:.3f}",
-                    "CV MAPE (%)": f"{metrics['cv_mape']:.2f}",
-                    "Test R²": f"{metrics['test_r2']:.3f}",
-                    "Test MAPE (%)": f"{metrics['test_mape']:.2f}",
-                }
-            )
+            row = {
+                "Mô hình": name,
+                "Trạng thái": "Đang dùng" if name == best_name else "Đối chiếu",
+                "CV R² (mean)": f"{metrics['cv_r2_mean']:.3f}",
+                "CV R² (std)": f"±{metrics['cv_r2_std']:.3f}",
+                "CV MAE (tỷ)": f"{metrics['cv_mae']:.3f}",
+                "CV MAPE (%)": f"{metrics['cv_mape']:.2f}",
+                "Test R²": f"{metrics['test_r2']:.3f}",
+                "Test MAPE (%)": f"{metrics['test_mape']:.2f}",
+            }
+            if "test_median_ape" in metrics:
+                row["Test Median APE (%)"] = f"{metrics['test_median_ape']:.2f}"
+                row["Test lệch ≤ 20%"] = f"{metrics['test_hit_rate_20'] * 100:.1f}%"
+                row["Test R² log"] = f"{metrics['test_r2_log']:.3f}"
+            rows.append(row)
         rows.sort(key=lambda row: row["Trạng thái"] != "Đang dùng")
         st.dataframe(
             pd.DataFrame(rows),
@@ -468,6 +496,48 @@ with tab3:
         )
     else:
         st.info("Chưa có dữ liệu CV (model cũ). Train lại để xem.")
+
+    segment_metrics = evaluation_report.get("segment_metrics")
+    if segment_metrics:
+        st.subheader(
+            f"Sai số theo nhóm — {evaluation_report.get('segment_metrics_model', best_name)}",
+            icon=":material/stacked_bar_chart:",
+        )
+        segment_tabs = st.tabs(["Khoảng giá thật", "Loại bất động sản", "Quận/huyện"])
+        segment_sources = [
+            ("price_band", "Khoảng giá"),
+            ("property_type", "Loại BĐS"),
+            ("district", "Quận/huyện"),
+        ]
+        for tab, (key, title) in zip(segment_tabs, segment_sources):
+            with tab:
+                records = segment_metrics.get(key, [])
+                if not records:
+                    st.caption("Không có nhóm nào đủ số mẫu để báo cáo.")
+                    continue
+                table = pd.DataFrame(records).rename(columns={
+                    "segment": title, "n": "Số mẫu test",
+                    "median_price": "Giá trung vị (tỷ)", "mae": "MAE (tỷ)",
+                    "median_ape": "Median APE (%)", "hit_rate_20": "Lệch ≤ 20%",
+                    "bias": "Dự đoán / thực tế",
+                })
+                st.dataframe(
+                    table,
+                    hide_index=True,
+                    column_config={
+                        "Số mẫu test": st.column_config.NumberColumn(format="%d"),
+                        "Giá trung vị (tỷ)": st.column_config.NumberColumn(format="%.2f"),
+                        "MAE (tỷ)": st.column_config.NumberColumn(format="%.2f"),
+                        "Median APE (%)": st.column_config.NumberColumn(format="%.1f"),
+                        "Lệch ≤ 20%": st.column_config.NumberColumn(format="percent"),
+                        "Dự đoán / thực tế": st.column_config.NumberColumn(format="%.2f"),
+                    },
+                    alt=f"Sai số của mô hình theo {title.lower()}",
+                )
+        st.caption(
+            "Chỉ hiển thị nhóm có từ 200 mẫu test trở lên; dùng để nhận biết "
+            "mô hình còn yếu ở phân khúc nào."
+        )
 
     if importance is not None:
         st.subheader(
@@ -503,4 +573,8 @@ with tab3:
 | **CV R² std** | Độ lệch chuẩn R² qua các fold — thấp = model ổn định |
 | **MAE (tỷ VNĐ)** | Sai số tuyệt đối trung bình (Mean Absolute Error) |
 | **MAPE (%)** | Sai số phần trăm tuyệt đối trung bình trên giá gốc; càng thấp càng tốt, có thể vượt 100% và nhạy với giá thật rất nhỏ |
+| **Median APE (%)** | Trung vị sai số phần trăm; ít bị vài dự đoán cực đoan kéo lệch hơn MAPE |
+| **Lệch ≤ 10% / ≤ 20%** | Tỷ lệ căn có giá dự đoán lệch không quá 10% hoặc 20% |
+| **R² log** | R² trên log1p(giá), cùng thang với target lúc huấn luyện |
+| **Dự đoán / thực tế** | Trung vị tỷ lệ dự đoán trên thực tế; nhỏ hơn 1 nghĩa là thường dự đoán thấp |
 """)
