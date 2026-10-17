@@ -86,7 +86,7 @@ with tab1:
     df = load_data(50000, data_modified_ns)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Mẫu dữ liệu minh họa", f"{len(df):,}")
-    col2.metric("Giá trung vị", f"{df['price_ty'].median():.1f} tỷ")
+    col2.metric("Giá trung vị", f"{df['price_ty'].median():.2f} tỷ")
     col3.metric("Diện tích trung vị", f"{df['area'].median():.0f} m²")
     col4.metric("Số quận/huyện", df["district_name"].nunique())
 
@@ -264,15 +264,9 @@ with tab2:
                     lo = max(0, pred * (1 - error_rate))
                     hi = pred * (1 + error_rate)
                     col_r1, col_r2, col_r3 = st.columns(3)
-                    col_r1.metric(
-                        "Giá dự đoán", f"{pred:.2f} tỷ", border=True
-                    )
-                    col_r2.metric(
-                        "Cận tham khảo dưới", f"{lo:.2f} tỷ", border=True
-                    )
-                    col_r3.metric(
-                        "Cận tham khảo trên", f"{hi:.2f} tỷ", border=True
-                    )
+                    col_r1.metric("Giá dự đoán", f"{pred:.2f} tỷ", border=True)
+                    col_r2.metric("Cận tham khảo dưới", f"{lo:.2f} tỷ", border=True)
+                    col_r3.metric("Cận tham khảo trên", f"{hi:.2f} tỷ", border=True)
                     st.caption(
                         f"Khoảng tham khảo được quy đổi theo MAPE {best_mape:.2f}% "
                         f"của {best_name}. Đây không phải khoảng tin cậy và không "
@@ -426,74 +420,113 @@ with tab3:
         if baseline_mae and baseline_mae > 0:
             improvement = (1 - selected["test_mae"] / baseline_mae) * 100
 
+        has_extra = "test_median_ape" in selected
+        mae_delta = (
+            f"{-improvement:.0f}% so với baseline" if improvement is not None else None
+        )
         score_cols = st.columns(4)
         score_cols[0].metric(
-            "Test R²", f"{selected['test_r2']:.3f}", border=True
+            "Test R²",
+            f"{selected['test_r2']:.3f}",
+            border=True,
+            help="Tỷ lệ phương sai giải thích được trên giá gốc.",
         )
         score_cols[1].metric(
-            "Test MAPE", f"{selected['test_mape']:.2f}%", border=True
-        )
-        score_cols[2].metric(
-            "Test MAE", f"{selected['test_mae']:.2f} tỷ", border=True
-        )
-        score_cols[3].metric(
-            "Tốt hơn baseline",
-            f"{improvement:.1f}%" if improvement is not None else "—",
+            "Test MAE",
+            f"{selected['test_mae']:.2f} tỷ",
+            delta=mae_delta,
+            delta_color="inverse",
             border=True,
+            help="Sai số tuyệt đối trung bình; mũi tên so với baseline đoán trung vị.",
         )
-
-        if "test_median_ape" in selected:
-            extra_cols = st.columns(4)
-            extra_cols[0].metric(
-                "Sai lệch trung vị (Median APE)",
+        if has_extra:
+            score_cols[2].metric(
+                "Sai lệch trung vị",
                 f"{selected['test_median_ape']:.2f}%",
-                border=True, help="Median APE: một nửa dự đoán lệch ít hơn mức này.",
+                border=True,
+                help="Median APE: một nửa số dự đoán lệch ít hơn mức này.",
             )
-            extra_cols[1].metric(
-                "Dự đoán lệch ≤ 10%",
-                f"{selected['test_hit_rate_10'] * 100:.1f}%", border=True,
-            )
-            extra_cols[2].metric(
+            score_cols[3].metric(
                 "Dự đoán lệch ≤ 20%",
-                f"{selected['test_hit_rate_20'] * 100:.1f}%", border=True,
-            )
-            extra_cols[3].metric(
-                "R² trên thang log", f"{selected['test_r2_log']:.3f}",
-                border=True, help="R² tính trên log1p(giá), cùng thang huấn luyện.",
+                f"{selected['test_hit_rate_20'] * 100:.2f}%",
+                border=True,
+                help="Tỷ lệ căn có giá dự đoán lệch không quá 20%.",
             )
         else:
+            score_cols[2].metric(
+                "Test MAPE",
+                f"{selected['test_mape']:.2f}%",
+                border=True,
+            )
             st.info(
                 "Artifact hiện tại chưa có metric mở rộng và sai số theo nhóm. "
                 "Chạy lại `python src/train_model.py` để tạo."
             )
 
+        # Bảng chính: mỗi câu hỏi một chỉ số; phần còn lại nằm trong expander.
         rows = []
-        for name, metrics in cv_summary.items():
+        for name, metrics in sorted(
+            cv_summary.items(),
+            key=lambda item: -item[1]["cv_r2_mean"],
+        ):
             row = {
-                "Mô hình": name,
-                "Trạng thái": "Đang dùng" if name == best_name else "Đối chiếu",
-                "CV R² (mean)": f"{metrics['cv_r2_mean']:.3f}",
-                "CV R² (std)": f"±{metrics['cv_r2_std']:.3f}",
-                "CV MAE (tỷ)": f"{metrics['cv_mae']:.3f}",
-                "CV MAPE (%)": f"{metrics['cv_mape']:.2f}",
+                "Mô hình": f"✅ {name}" if name == best_name else name,
+                "CV R² (± std)": f"{metrics['cv_r2_mean']:.3f} ± {metrics['cv_r2_std']:.3f}",
                 "Test R²": f"{metrics['test_r2']:.3f}",
-                "Test MAPE (%)": f"{metrics['test_mape']:.2f}",
+                "Test MAE (tỷ)": f"{metrics['test_mae']:.2f}",
             }
             if "test_median_ape" in metrics:
-                row["Test Median APE (%)"] = f"{metrics['test_median_ape']:.2f}"
-                row["Test lệch ≤ 20%"] = f"{metrics['test_hit_rate_20'] * 100:.1f}%"
-                row["Test R² log"] = f"{metrics['test_r2_log']:.3f}"
+                row["Median APE"] = f"{metrics['test_median_ape']:.2f}%"
+                row["Lệch ≤ 20%"] = f"{metrics['test_hit_rate_20'] * 100:.2f}%"
+            else:
+                row["Test MAPE"] = f"{metrics['test_mape']:.2f}%"
             rows.append(row)
-        rows.sort(key=lambda row: row["Trạng thái"] != "Đang dùng")
         st.dataframe(
             pd.DataFrame(rows),
             hide_index=True,
-            alt="So sánh kết quả đánh giá chéo và tập kiểm tra của các mô hình",
+            alt="So sánh các mô hình theo CV R², Test R², MAE, Median APE và tỷ lệ lệch dưới 20%",
         )
         st.caption(
-            "Mô hình được chọn bằng CV trên tập train; tập test chỉ dùng để báo "
-            "cáo kết quả cuối cùng."
+            "✅ là mô hình đang dùng, được chọn bằng CV trên tập train; tập test chỉ "
+            "dùng để báo cáo kết quả cuối cùng."
         )
+
+        with st.expander("Xem toàn bộ chỉ số", icon=":material/table_view:"):
+            full_columns = [
+                ("cv_r2_mean", "CV R² (mean)", "{:.3f}"),
+                ("cv_r2_std", "CV R² (std)", "{:.3f}"),
+                ("cv_mae", "CV MAE (tỷ)", "{:.2f}"),
+                ("cv_mape", "CV MAPE (%)", "{:.2f}"),
+                ("cv_median_ape", "CV Median APE (%)", "{:.2f}"),
+                ("test_r2", "Test R²", "{:.3f}"),
+                ("test_r2_log", "Test R² log", "{:.3f}"),
+                ("test_mae", "Test MAE (tỷ)", "{:.2f}"),
+                ("test_rmse", "Test RMSE (tỷ)", "{:.2f}"),
+                ("test_rmsle", "Test RMSLE", "{:.3f}"),
+                ("test_mape", "Test MAPE (%)", "{:.2f}"),
+                ("test_median_ape", "Test Median APE (%)", "{:.2f}"),
+                ("test_hit_rate_10", "Test lệch ≤ 10%", "pct"),
+                ("test_hit_rate_20", "Test lệch ≤ 20%", "pct"),
+                ("test_bias", "Test dự đoán / thực tế", "{:.2f}"),
+            ]
+            full_rows = []
+            for name, metrics in sorted(
+                cv_summary.items(),
+                key=lambda item: -item[1]["cv_r2_mean"],
+            ):
+                row = {"Mô hình": f"✅ {name}" if name == best_name else name}
+                for key, label, fmt in full_columns:
+                    if key in metrics:
+                        value = metrics[key]
+                        row[label] = (
+                            f"{value * 100:.2f}%" if fmt == "pct" else fmt.format(value)
+                        )
+                full_rows.append(row)
+            st.dataframe(
+                pd.DataFrame(full_rows),
+                hide_index=True,
+                alt="Toàn bộ chỉ số CV và test của từng mô hình",
+            )
     else:
         st.info("Chưa có dữ liệu CV (model cũ). Train lại để xem.")
 
@@ -515,22 +548,31 @@ with tab3:
                 if not records:
                     st.caption("Không có nhóm nào đủ số mẫu để báo cáo.")
                     continue
-                table = pd.DataFrame(records).rename(columns={
-                    "segment": title, "n": "Số mẫu test",
-                    "median_price": "Giá trung vị (tỷ)", "mae": "MAE (tỷ)",
-                    "median_ape": "Median APE (%)", "hit_rate_20": "Lệch ≤ 20%",
-                    "bias": "Dự đoán / thực tế",
-                })
+                table = pd.DataFrame(records).rename(
+                    columns={
+                        "segment": title,
+                        "n": "Số mẫu test",
+                        "median_price": "Giá trung vị (tỷ)",
+                        "mae": "MAE (tỷ)",
+                        "median_ape": "Median APE (%)",
+                        "hit_rate_20": "Lệch ≤ 20%",
+                        "bias": "Dự đoán / thực tế",
+                    }
+                )
                 st.dataframe(
                     table,
                     hide_index=True,
                     column_config={
                         "Số mẫu test": st.column_config.NumberColumn(format="%d"),
-                        "Giá trung vị (tỷ)": st.column_config.NumberColumn(format="%.2f"),
+                        "Giá trung vị (tỷ)": st.column_config.NumberColumn(
+                            format="%.2f"
+                        ),
                         "MAE (tỷ)": st.column_config.NumberColumn(format="%.2f"),
-                        "Median APE (%)": st.column_config.NumberColumn(format="%.1f"),
+                        "Median APE (%)": st.column_config.NumberColumn(format="%.2f"),
                         "Lệch ≤ 20%": st.column_config.NumberColumn(format="percent"),
-                        "Dự đoán / thực tế": st.column_config.NumberColumn(format="%.2f"),
+                        "Dự đoán / thực tế": st.column_config.NumberColumn(
+                            format="%.2f"
+                        ),
                     },
                     alt=f"Sai số của mô hình theo {title.lower()}",
                 )

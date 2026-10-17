@@ -1,9 +1,86 @@
 # Dự đoán giá nhà Hà Nội — dữ liệu 2025–2026
 
-Dự đoán **giá chào bán**. Ngày đăng chỉ mô tả dữ liệu; không
-dùng làm feature và không đánh giá theo thời gian.
+Dự đoán **giá chào bán** (tỷ VNĐ) của nhà ở Hà Nội từ diện tích, số phòng, số tầng,
+mặt tiền, loại bất động sản, quận/huyện và phường/xã. Project gồm pipeline huấn
+luyện có kiểm soát rò rỉ dữ liệu, ba mô hình hồi quy được so sánh bằng
+cross-validation theo nhóm, và ứng dụng Streamlit để định giá và xem kết quả đánh giá.
+Ngày đăng chỉ mô tả dữ liệu; không dùng làm feature và không đánh giá theo thời gian.
+
+## Kết quả
+
+Dữ liệu: 1.140.542 tin thô của Hà Nội → 875.967 tin hợp lệ → 657.691 mẫu sau khử
+trùng (train 526.152, test 131.539, chia theo nhóm tin trùng). Giá trung vị toàn
+tập là 11,26 tỷ. Mô hình huấn luyện trên `log1p(giá)`; metric tính trên giá gốc sau
+`expm1()`, riêng R² log tính trên `log1p`.
+
+| Mô hình | CV R² | Test R² | R² log | MAE (tỷ) | Median APE | Lệch ≤ 20% |
+|---|---|---|---|---|---|---|
+| **Random Forest** (được chọn) | 0,660 ± 0,040 | **0,711** | **0,851** | **5,12** | **17,4%** | **55,9%** |
+| Gradient Boosting | 0,634 ± 0,065 | 0,701 | 0,850 | 5,22 | 18,0% | 54,6% |
+| Ridge (log1p) | 0,573 ± 0,059 | 0,614 | 0,816 | 5,91 | 21,0% | 48,0% |
+| Baseline (đoán trung vị train) | — | — | — | 12,07 | 49,3% | — |
+
+Random Forest giảm MAE khoảng 58% so với baseline; CV và test sát nhau nên không có
+dấu hiệu rò rỉ hay overfit. Ridge trên đặc trưng `log1p` đạt R² log 0,816, gần các mô
+hình cây (0,85), nên phần lớn cấu trúc của dữ liệu đã nằm trên thang log-log; cây
+còn hơn ở tương tác giữa vị trí, loại nhà và diện tích, rõ nhất ở R² trên giá gốc
+(0,711 so với 0,614) và tỷ lệ lệch ≤ 20% (55,9% so với 48,0%).
+
+Lần train trước dùng Linear Regression không regularize và cho R² âm rất lớn (test R²
+−2,68 triệu, MAE 449,6 tỷ): 45 dự đoán vượt 10.000 tỷ do diện tích thô bị ngoại suy
+rồi `expm1` khuếch đại. Việc đổi sang Ridge với `log1p` cho các cột số đã khắc phục.
+
+### Sai số của Random Forest theo nhóm (tập test)
+
+| Khoảng giá thật | Số mẫu | Median APE | Lệch ≤ 20% |
+|---|---|---|---|
+| < 3 tỷ | 2.295 | 28,6% | 39,6% |
+| 3–6 tỷ | 19.121 | 14,4% | 62,2% |
+| 6–10 tỷ | 37.437 | 14,4% | 63,8% |
+| 10–20 tỷ | 39.563 | 17,9% | 54,9% |
+| > 20 tỷ | 33.123 | 22,2% | 45,4% |
+
+Model chính xác nhất ở phân khúc 3–10 tỷ. Theo loại nhà, căn hộ chung cư tốt nhất
+(Median APE 12,9%), shophouse kém nhất (26,7%). Theo quận, Hoàn Kiếm (giá trung vị
+32 tỷ) có sai số tuyệt đối lớn nhất (MAE khoảng 31 tỷ). Chi tiết từng quận nằm trong
+tab *Đánh giá mô hình* của app.
+
+### Cách đọc các chỉ số
+
+| Chỉ số | Ý nghĩa |
+|---|---|
+| R² | Tỷ lệ phương sai giải thích được; có thể âm nếu kém hơn dự đoán bằng trung bình. Trên giá gốc, R² bị vài căn rất đắt chi phối |
+| MAE / RMSE (tỷ) | Sai số tuyệt đối trung bình / căn bậc hai sai số bình phương; RMSE nhạy với sai số lớn |
+| MAPE (%) | Sai số phần trăm tuyệt đối trung bình; bị kéo lên bởi vài dự đoán lệch rất lớn |
+| Median APE (%) | Trung vị sai số phần trăm; phản ánh căn nhà điển hình tốt hơn MAPE |
+| Lệch ≤ 10% / 20% | Tỷ lệ căn có giá dự đoán lệch không quá 10% / 20% so với giá thật |
+| R² log, RMSLE | R² và RMSE trên `log1p(giá)`, cùng thang với target khi huấn luyện |
+| Bias | Trung vị `dự đoán / thực tế`; nhỏ hơn 1 nghĩa là model thường đoán thấp hơn |
+
+## Hạn chế
+
+- **Giá chào bán, không phải giá giao dịch.** Giá thật khi chốt thường thấp hơn.
+- **Chỉ Hà Nội, không có đất.** Dòng `property_type_name = "Đất"` bị loại; app chỉ
+  định giá nhà, biệt thự/nhà liền kề, shophouse và căn hộ chung cư.
+- **Ít đặc trưng.** Chỉ có 5 biến số, quận, phường và loại bất động sản. Không có tọa
+  độ, hướng nhà, pháp lý, khoảng cách tới trung tâm hay độ rộng ngõ — những yếu tố
+  ảnh hưởng mạnh đến giá nhà phố.
+- **Test được lọc bằng quy tắc có dùng giá.** Các tin có đơn giá dưới 3 triệu/m² hoặc
+  trên 4 tỷ/m² bị loại trước khi chia tập, nên điểm số mô tả chất lượng trên dữ liệu
+  đã làm sạch chứ không phải mọi tin đăng thực tế.
+- **Khử trùng chỉ là fingerprint.** Group key gồm đặc trưng, vị trí và giá; cùng một
+  căn đăng lại với giá khác vẫn được coi là hai nhóm.
+- **Khoảng tham khảo trên app** là `giá dự đoán × (1 ± MAPE)`, không phải khoảng tin cậy.
+- **Sai số theo khoảng giá thật** thường cho thấy dự đoán cao ở nhóm rẻ và thấp ở nhóm
+  đắt (hồi quy về trung bình); dùng để biết model yếu ở phân khúc nào, không phải để
+  kết luận model lệch trên từng căn.
+- Target encoding quận/phường chưa làm mượt, nên phường ít tin có thể cho giá nhiễu.
 
 ## Chạy project
+
+Yêu cầu Python 3.12 trở lên (artifact được train bằng Python 3.13). `scikit-learn`
+cần đúng dải 1.9.x để load được `model.pkl`; chạy app không cần train lại vì
+`artifacts/` đã có sẵn, còn tab *Tổng quan dữ liệu* cần thêm dữ liệu gốc.
 
 ```powershell
 python -m venv venv
@@ -26,7 +103,7 @@ sau đó đặt các shard vào thư mục nêu trên nếu muốn huấn luyệ
 ## Cấu trúc
 
 ```text
-app.py                    Giao diện hiện hữu; đọc model bundle
+app.py                    Ứng dụng Streamlit; đọc model bundle
 artifacts/
   model.pkl               Model triển khai, tạo sau khi train
   preprocessor.pkl        Preprocessor đã fit và metadata
@@ -126,7 +203,7 @@ Ridge Regression, Random Forest và Gradient Boosting fit target `np.log1p(price
 ở CV, train/test và refit. Dự đoán được đổi ngược bằng `np.expm1()` trước khi
 tính R²/MAE/RMSE/MAPE, lưu dự đoán hoặc hiển thị trên app. OOF target encoding
 vẫn học từ giá gốc. Results và artifacts ghi
-`target_transform = "log1p"`; cần train lại để tạo model sử dụng target mới.
+`target_transform = "log1p"`.
 
 ## Kết quả và phiên bản
 
@@ -141,8 +218,9 @@ CV R² trung bình trước khi đánh giá test; kết quả test không chọn
 
 Model triển khai được refit sau đánh giá trên toàn bộ dữ liệu khử trùng.
 Các metric báo cáo thuộc model chỉ fit trên tập train của thí nghiệm; không
-đánh giá lại test bằng model triển khai. Biên theo MAPE trên app chỉ tham khảo,
-không bảo đảm mức bao phủ như khoảng tin cậy.
+đánh giá lại test bằng model triển khai. Khoảng tham khảo trên app là
+`giá dự đoán × (1 ± MAPE test)`, không phải khoảng tin cậy và không bảo đảm
+một mức bao phủ xác suất cụ thể.
 
 Mỗi run lưu source, metadata, split assignment, dự đoán test, model đánh giá và
 model triển khai. Hash bao phủ toàn bộ `src/*.py`, tests, app, README và
@@ -165,7 +243,8 @@ phiên bản nào; chạy lệnh train ở trên để tạo artifact từ code 
 - `results/metrics.json`: chỉ số và thông tin phiên bản.
 - `results/evaluation.csv`: giá thật và dự đoán từng model trên test.
 - `results/runs/<version>/`: snapshot source, split và bundle để tái lập; chỉ giữ run mới nhất.
-- Dữ liệu, artifacts và results được giữ local, không track Git.
+- `data/parquet_dataset/` và `results/` không track Git (xem `.gitignore`);
+  `artifacts/` được kèm trong repo để chạy app ngay mà không cần train.
 - Metric chính tính trên giá gốc sau `expm1()`; R² log và RMSLE tính trên
   `log1p(giá)`. Tab đánh giá còn hiển thị sai số theo phân khúc khi artifact mới có dữ liệu.
 
