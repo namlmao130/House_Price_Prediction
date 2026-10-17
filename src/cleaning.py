@@ -5,33 +5,56 @@ import pandas as pd
 
 from config import (
     CATEGORICAL_COLUMNS, INPUT_COLUMNS, NUMERIC_COLUMNS, PRICE_SCALE,
-    MAX_PRICE_TY, MAX_FLOOR_COUNT, MIN_ROOMS_FOR_RATIO_CHECK,
-    MIN_BATHROOM_PER_BEDROOM, MAX_BATHROOM_PER_BEDROOM, MAX_PRICE_PER_M2,
+    MAX_PRICE_TY, MIN_AREA, MAX_AREA,
+    MIN_BEDROOM_COUNT, MAX_BEDROOM_COUNT,
+    MIN_BATHROOM_COUNT, MAX_BATHROOM_COUNT,
+    MIN_FLOOR_COUNT, MAX_FLOOR_COUNT,
+    MIN_FRONTAGE_WIDTH, MAX_FRONTAGE_WIDTH,
+    MIN_PRICE_PER_M2, MAX_PRICE_PER_M2,
 )
 from validation import require_columns, require_unique_index
 
 
 def data_entry_error_flags(df: pd.DataFrame) -> pd.DataFrame:
     """Gắn cờ các lỗi nhập liệu rõ ràng bằng ngưỡng cố định theo từng dòng."""
-    require_columns(df, ["price", "area", "floor_count", "bedroom_count", "bathroom_count"])
+    require_columns(
+        df,
+        [
+            "price", "area", "bedroom_count", "bathroom_count",
+            "floor_count", "frontage_width",
+        ],
+    )
     price = pd.to_numeric(df["price"], errors="coerce") / PRICE_SCALE
     area = pd.to_numeric(df["area"], errors="coerce")
     floors = pd.to_numeric(df["floor_count"], errors="coerce")
     bedrooms = pd.to_numeric(df["bedroom_count"], errors="coerce")
     bathrooms = pd.to_numeric(df["bathroom_count"], errors="coerce")
+    frontage = pd.to_numeric(df["frontage_width"], errors="coerce")
     return pd.DataFrame(
         {
             "price_non_positive": price.le(0),
             "price_above_10000_ty": price.gt(MAX_PRICE_TY),
-            "floor_count_above_70": floors.gt(MAX_FLOOR_COUNT),
-            "bathroom_bedroom_ratio_below_0_1": (
-                bedrooms.ge(MIN_ROOMS_FOR_RATIO_CHECK)
-                & bathrooms.lt(bedrooms * MIN_BATHROOM_PER_BEDROOM)
+            "area_below_min": area.lt(MIN_AREA),
+            "area_above_max": area.gt(MAX_AREA),
+            "bedroom_count_outside_bounds": (
+                bedrooms.lt(MIN_BEDROOM_COUNT) | bedrooms.gt(MAX_BEDROOM_COUNT)
             ),
-            "bathroom_bedroom_ratio_above_3": (
-                bedrooms.gt(0) & bathrooms.gt(bedrooms * MAX_BATHROOM_PER_BEDROOM)
+            "bathroom_count_outside_bounds": (
+                bathrooms.lt(MIN_BATHROOM_COUNT) | bathrooms.gt(MAX_BATHROOM_COUNT)
             ),
-            "price_per_m2_above_4": (area.gt(0) & price.div(area).gt(MAX_PRICE_PER_M2)),
+            "floor_count_outside_bounds": (
+                floors.lt(MIN_FLOOR_COUNT) | floors.gt(MAX_FLOOR_COUNT)
+            ),
+            "frontage_width_outside_bounds": (
+                frontage.lt(MIN_FRONTAGE_WIDTH) | frontage.gt(MAX_FRONTAGE_WIDTH)
+            ),
+            "frontage_width_above_area": frontage.gt(area),
+            "price_per_m2_below_min": (
+                area.gt(0) & price.div(area).lt(MIN_PRICE_PER_M2)
+            ),
+            "price_per_m2_above_max": (
+                area.gt(0) & price.div(area).gt(MAX_PRICE_PER_M2)
+            ),
         },
         index=df.index,
     ).fillna(False)
@@ -60,9 +83,6 @@ def clean_listings(raw_df: pd.DataFrame) -> pd.DataFrame:
         & cleaned["price"].gt(0)
         & cleaned["area"].gt(0)
         & ~cleaned[NUMERIC_COLUMNS].lt(0).any(axis=1)
-        # Giữ heuristic mặt tiền của project, không coi m <= m² là định luật.
-        & (cleaned["frontage_width"].isna()
-           | cleaned["frontage_width"].le(cleaned["area"]))
         & ~data_entry_error_flags(cleaned).any(axis=1)
     )
     cleaned = cleaned.loc[valid].copy()
@@ -92,9 +112,17 @@ def dataset_summary(raw: pd.DataFrame, eligible: pd.DataFrame) -> dict:
         },
         "data_entry_error_rules": {
             "max_price_ty": MAX_PRICE_TY,
+            "min_area": MIN_AREA,
+            "max_area": MAX_AREA,
+            "min_bedroom_count": MIN_BEDROOM_COUNT,
+            "max_bedroom_count": MAX_BEDROOM_COUNT,
+            "min_bathroom_count": MIN_BATHROOM_COUNT,
+            "max_bathroom_count": MAX_BATHROOM_COUNT,
+            "min_floor_count": MIN_FLOOR_COUNT,
             "max_floor_count": MAX_FLOOR_COUNT,
-            "room_ratio_check_from_bedrooms": MIN_ROOMS_FOR_RATIO_CHECK,
-            "min_bathroom_per_bedroom": MIN_BATHROOM_PER_BEDROOM,
+            "min_frontage_width": MIN_FRONTAGE_WIDTH,
+            "max_frontage_width": MAX_FRONTAGE_WIDTH,
+            "min_price_per_m2": MIN_PRICE_PER_M2,
             "max_price_per_m2": MAX_PRICE_PER_M2,
         },
     }

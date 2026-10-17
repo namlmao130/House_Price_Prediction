@@ -18,21 +18,33 @@ PRICE_UNIT = "ty VND"
 TARGET_TRANSFORM = "log1p"
 
 IMPUTE_NUMERIC_COLUMNS = [
-    "bedroom_count", "bathroom_count", "floor_count", "frontage_width",
+    "bedroom_count",
+    "bathroom_count",
+    "floor_count",
+    "frontage_width",
 ]
 NUMERIC_COLUMNS = ["area", *IMPUTE_NUMERIC_COLUMNS]
 MISSING_INDICATOR_COLUMNS = [f"{name}_missing" for name in IMPUTE_NUMERIC_COLUMNS]
 CATEGORICAL_COLUMNS = ["property_type_name", "district_name"]
 INPUT_COLUMNS = NUMERIC_COLUMNS + CATEGORICAL_COLUMNS + ["ward_name"]
 DEDUP_GROUP_COLUMNS = NUMERIC_COLUMNS + [
-    "district_name", "ward_name", "property_type_name", "price_ty",
+    "district_name",
+    "ward_name",
+    "property_type_name",
+    "price_ty",
 ]
 ENCODING_COLUMNS = ["district_median_price", "ward_median_price"]
 RAW_COLUMNS = ["published_at", "price", *INPUT_COLUMNS]
 MAX_PRICE_TY = 10_000.0
-MAX_FLOOR_COUNT = 70.0
-MIN_ROOMS_FOR_RATIO_CHECK = 20.0
-MIN_BATHROOM_PER_BEDROOM = 0.1
-MAX_BATHROOM_PER_BEDROOM = 3
+MIN_AREA = 10.0
+MAX_AREA = 2_500.0
+MIN_BEDROOM_COUNT = 1.0
+MAX_BEDROOM_COUNT = 50.0
+MIN_BATHROOM_COUNT = 1.0
+MAX_BATHROOM_COUNT = 50.0
+MIN_FLOOR_COUNT = 1.0
+MAX_FLOOR_COUNT = 30.0
+MIN_FRONTAGE_WIDTH = 1.0
+MAX_FRONTAGE_WIDTH = 100.0
+MIN_PRICE_PER_M2 = 0.003
 MAX_PRICE_PER_M2 = 4
-

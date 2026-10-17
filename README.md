@@ -97,13 +97,11 @@ giữ key cũ như `feature_cols`, `districts`, `numeric_medians`, `price_unit` 
 - Bốn cột số tùy chọn được giữ NaN: phòng ngủ, phòng tắm, số tầng, mặt tiền.
   Median học từ train; có bốn feature `*_missing`.
 - Numeric âm bị loại nếu có giá trị. Inf/-inf chuyển thành missing ở cleaning.
-- Giữ heuristic `frontage_width <= area` nếu có mặt tiền; đây là quy tắc đồ án,
-  không phải định luật so sánh mét với mét vuông.
-- Giá trên 10.000 tỷ hoặc số tầng trên 70 bị loại.
-- Từ 20 phòng ngủ trở lên: loại nếu phòng tắm dưới 10% phòng ngủ.
-  Nếu phòng ngủ > 0: loại nếu phòng tắm vượt 3 lần phòng ngủ.
-- Giá trên **4 tỷ/m²** bị loại. Không có quy tắc diện tích trên số phòng ngủ.
-- Không áp dụng MIN_AREA/MAX_AREA: hai constant cũ không được dùng nên đã bỏ.
+- Diện tích phải từ 10 đến 2.500 m². Các cột tùy chọn, nếu có, phải thỏa:
+  1–50 phòng ngủ, 1–50 phòng tắm, 1–30 tầng và mặt tiền 1–100 m.
+- Mặt tiền không được lớn hơn diện tích.
+- Giá trên 10.000 tỷ bị loại.
+- Giá dưới **3 triệu/m²** hoặc trên **4 tỷ/m²** bị loại. Không có quy tắc diện tích trên số phòng ngủ.
 - Group key giữ nguyên đặc trưng số, quận, phường, loại BĐS và **giá**; chuỗi
   chuẩn hóa Unicode, khoảng trắng, casefold. Khác giá là khác group theo quy ước.
   Đây là fingerprint, không phải ID bất động sản đã xác thực.

@@ -229,9 +229,49 @@ class PreprocessingTests(unittest.TestCase):
         raw["bathroom_count"] = [4., 3., 5., 4., 1., 1., 20., 4.]
         flags = data_entry_error_flags(raw)
         self.assertEqual(int(flags.price_above_10000_ty.sum()), 2)
-        self.assertEqual(int(flags.floor_count_above_70.sum()), 1)
-        self.assertEqual(int(flags.bathroom_bedroom_ratio_below_0_1.sum()), 1)
-        self.assertEqual(clean(raw).index.tolist(), [raw.index[i] for i in [0, 6, 7]])
+        self.assertEqual(int(flags.floor_count_outside_bounds.sum()), 3)
+        self.assertEqual(int(flags.bedroom_count_outside_bounds.sum()), 2)
+        self.assertEqual(clean(raw).index.tolist(), [raw.index[0]])
+
+    def test_price_per_m2_below_3_million_is_removed(self):
+        raw = example_rows(3)
+        raw["area"] = [100., 100., 100.]
+        raw["price"] = [299_999_999., 300_000_000., 301_000_000.]
+        flags = data_entry_error_flags(raw)
+        self.assertEqual(
+            flags.price_per_m2_below_min.tolist(), [True, False, False]
+        )
+        self.assertEqual(clean(raw).index.tolist(), raw.index[1:].tolist())
+
+    def test_area_bounds_are_inclusive(self):
+        raw = example_rows(4)
+        raw["area"] = [9.9, 10., 2500., 2500.1]
+        raw["price"] = 10e9
+        flags = data_entry_error_flags(raw)
+        self.assertEqual(flags.area_below_min.tolist(), [True, False, False, False])
+        self.assertEqual(flags.area_above_max.tolist(), [False, False, False, True])
+        self.assertEqual(clean(raw).index.tolist(), raw.index[1:3].tolist())
+
+    def test_optional_numeric_bounds_and_frontage_area_rule(self):
+        raw = example_rows(10)
+        raw["area"] = 100.
+        raw["price"] = 10e9
+        raw.loc[raw.index[0], "bedroom_count"] = 0.
+        raw.loc[raw.index[1], "bedroom_count"] = 51.
+        raw.loc[raw.index[2], "bathroom_count"] = 0.
+        raw.loc[raw.index[3], "bathroom_count"] = 51.
+        raw.loc[raw.index[4], "floor_count"] = 0.
+        raw.loc[raw.index[5], "floor_count"] = 31.
+        raw.loc[raw.index[6], "frontage_width"] = 0.
+        raw.loc[raw.index[7], ["area", "frontage_width"]] = [200., 101.]
+        raw.loc[raw.index[8], ["area", "frontage_width"]] = [10., 11.]
+        flags = data_entry_error_flags(raw)
+        self.assertEqual(int(flags.bedroom_count_outside_bounds.sum()), 2)
+        self.assertEqual(int(flags.bathroom_count_outside_bounds.sum()), 2)
+        self.assertEqual(int(flags.floor_count_outside_bounds.sum()), 2)
+        self.assertEqual(int(flags.frontage_width_outside_bounds.sum()), 2)
+        self.assertEqual(int(flags.frontage_width_above_area.sum()), 1)
+        self.assertEqual(clean(raw).index.tolist(), [raw.index[9]])
 
     def test_full_evaluation_uses_five_folds_and_keeps_test_outliers(self):
         X = example_rows(120)

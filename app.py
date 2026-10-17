@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
 # EDA và training dùng chung cleaning, bao gồm loại các dòng Đất.
 from cleaning import clean_listings
-from data_loader import load_raw_data
+from data_loader import load_raw_data, parquet_files
 from artifacts import load_artifacts
 from config import ARTIFACTS_DIR, MODEL_PATH, PREPROCESSOR_PATH
 from cleaning import deduplicate
@@ -31,9 +31,10 @@ def load_bundle(model_modified_ns, preprocessor_modified_ns):
 
 
 @st.cache_data(show_spinner="Đang tải dữ liệu...", max_entries=2)
-def load_data(sample_size=None) -> pd.DataFrame:
-    # load_raw_data() tự đọc 10 parquet và lọc Hà Nội
-    df = load_raw_data()
+def load_data(sample_size=None, data_modified_ns=()) -> pd.DataFrame:
+    # Lấy dư mẫu thô để sau cleaning/deduplicate vẫn đủ số dòng minh họa.
+    raw_sample_size = sample_size * 2 if sample_size is not None else None
+    df = load_raw_data(sample_size=raw_sample_size)
 
     df = clean_listings(df)
     df = deduplicate(df)
@@ -48,16 +49,21 @@ def load_data(sample_size=None) -> pd.DataFrame:
 if not MODEL_PATH.exists() or not PREPROCESSOR_PATH.exists():
     st.info("Chưa có model và preprocessor. Chạy python src/train_model.py trước.")
     st.stop()
-bundle = load_bundle(
-    MODEL_PATH.stat().st_mtime_ns, PREPROCESSOR_PATH.stat().st_mtime_ns
-)
+try:
+    bundle = load_bundle(
+        MODEL_PATH.stat().st_mtime_ns, PREPROCESSOR_PATH.stat().st_mtime_ns
+    )
+except Exception as error:
+    st.error(
+        "Không thể tải model và preprocessor. Các artifact có thể bị hỏng, "
+        "khác phiên bản hoặc không tương thích với môi trường hiện tại."
+    )
+    st.caption(f"Chi tiết: {error}")
+    st.stop()
 model = bundle["model"]
-feature_cols = bundle["feature_cols"]
 preprocessor = bundle["preprocessor"]
 districts = bundle["districts"]  # {district_name: median_price_ty}
-ward_medians = bundle.get("ward_medians", {})
 wards_by_district = bundle.get("wards_by_district", {})
-global_median = bundle["global_median_price"]
 best_name = bundle["best_model_name"]
 best_mae = bundle["best_model_mae"]
 cv_summary = bundle.get("cv_summary", {})
@@ -77,7 +83,8 @@ tab1, tab2, tab3 = st.tabs(["Tổng quan dữ liệu", "Dự đoán giá", "Đá
 
 # TAB 1: TỔNG QUAN
 with tab1:
-    df = load_data(50000)
+    data_modified_ns = tuple(path.stat().st_mtime_ns for path in parquet_files())
+    df = load_data(50000, data_modified_ns)
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Mẫu dữ liệu minh họa", f"{len(df):,}")
     col2.metric("Giá trung vị", f"{df['price_ty'].median():.1f} tỷ")
@@ -173,28 +180,32 @@ with tab2:
             ["Nhà", "Biệt thự/Nhà liền kề", "Shophouse", "Căn hộ chung cư"],
         )
         area = st.number_input(
-            "Diện tích (m²)", min_value=10.0, max_value=2000.0, value=60.0, step=5.0
+            "Diện tích (m²)", min_value=10.0, max_value=2500.0, value=60.0, step=5.0
         )
 
     with col2:
         bedroom_count = st.number_input(
-            "Số phòng ngủ", min_value=0, max_value=20, value=3, step=1
+            "Số phòng ngủ", min_value=1, max_value=50, value=3, step=1
         )
         bathroom_count = st.number_input(
-            "Số phòng tắm", min_value=0, max_value=20, value=2, step=1
+            "Số phòng tắm", min_value=1, max_value=50, value=2, step=1
         )
         floor_count = st.number_input(
-            "Số tầng", min_value=1, max_value=50, value=3, step=1
+            "Số tầng", min_value=1, max_value=30, value=3, step=1
         )
         frontage_width = st.number_input(
             "Chiều rộng mặt tiền (m)",
-            min_value=0.0,
+            min_value=1.0,
             max_value=100.0,
             value=4.0,
             step=0.5,
         )
 
-    if st.button("Dự đoán giá", type="primary"):
+    predict_clicked = st.button("Dự đoán giá", type="primary")
+    if predict_clicked and frontage_width > area:
+        st.warning("Chiều rộng mặt tiền không được lớn hơn diện tích.")
+
+    if predict_clicked and frontage_width <= area:
         input_df = pd.DataFrame(
             [
                 {

@@ -37,6 +37,21 @@ class RecordingPreprocessor:
 
 
 class WardSelectionTests(unittest.TestCase):
+    def test_artifact_load_error_is_shown_without_traceback(self):
+        st.cache_resource.clear()
+        st.cache_data.clear()
+        with patch.object(
+            artifacts, "load_artifacts", side_effect=ValueError("khác phiên bản")
+        ), patch.object(config, "MODEL_PATH", ROOT / "README.md"), patch.object(
+            config, "PREPROCESSOR_PATH", ROOT / "README.md"
+        ):
+            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+            self.assertFalse(app.exception)
+            self.assertTrue(any("Không thể tải model" in item.value for item in app.error))
+            self.assertTrue(any("khác phiên bản" in item.value for item in app.caption))
+        st.cache_resource.clear()
+        st.cache_data.clear()
+
     def test_ward_selection_unknown_and_district_change(self):
         model = RecordingModel()
         bundle = {
@@ -105,6 +120,18 @@ class WardSelectionTests(unittest.TestCase):
             app.button[0].click().run()
             self.assertFalse(app.exception)
             self.assertEqual(model.last_input["ward_median_price"].iloc[0], 35.)
+            previous_input = model.last_input.copy()
+            app.number_input[0].set_value(10.).run()
+            app.number_input[4].set_value(100.).run()
+            app.button[0].click().run()
+            self.assertFalse(app.exception)
+            self.assertTrue(any(
+                "mặt tiền không được lớn hơn diện tích" in item.value
+                for item in app.warning
+            ))
+            pd.testing.assert_frame_equal(model.last_input, previous_input)
+            app.number_input[0].set_value(60.).run()
+            app.number_input[4].set_value(4.).run()
             with patch.object(model, "predict", return_value=np.array([-3.1])):
                 app.button[0].click().run()
                 self.assertFalse(app.exception)
