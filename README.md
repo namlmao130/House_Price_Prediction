@@ -18,6 +18,11 @@ streamlit run app.py
 `data/parquet_dataset/`. Loader lọc Hà Nội ngay trong PyArrow và chỉ đọc 10 cột
 cần dùng. Không tự tải dữ liệu hoặc thêm feature.
 
+Repository không bao gồm các file dữ liệu vì dung lượng lớn. Có thể tải dữ liệu
+từ [Hugging Face](https://huggingface.co/datasets/tinixai/vietnam-real-estates)
+hoặc [Google Drive](https://drive.google.com/drive/folders/1wL0y6u8cnEI2HwrCupKvUy-EIJFlCFMS),
+sau đó đặt các shard vào thư mục nêu trên nếu muốn huấn luyện lại.
+
 ## Cấu trúc
 
 ```text
