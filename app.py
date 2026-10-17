@@ -8,7 +8,7 @@ import streamlit as st
 
 ROOT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ROOT_DIR / "src"))
-# EDA dùng toàn bộ dòng hợp lệ; chỉ các tập train mới được lọc ngoại lệ.
+# EDA và training dùng chung cleaning, bao gồm loại các dòng Đất.
 from cleaning import clean_listings
 from data_loader import load_raw_data
 from artifacts import load_artifacts
@@ -78,7 +78,6 @@ tab1, tab2, tab3 = st.tabs(["Tổng quan dữ liệu", "Dự đoán giá", "Đá
 # TAB 1: TỔNG QUAN
 with tab1:
     df = load_data(50000)
-    df = df[df["property_type_name"] != "Đất"].copy()
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Mẫu dữ liệu minh họa", f"{len(df):,}")
     col2.metric("Giá trung vị", f"{df['price_ty'].median():.1f} tỷ")
@@ -216,13 +215,6 @@ with tab2:
         if bundle.get("target_transform") == "log1p":
             pred = np.expm1(pred)
 
-        # Cảnh báo quận lạ
-        if district not in districts:
-            st.warning(
-                f"Quận {district} không có trong training data — "
-                "kết quả có thể kém chính xác."
-            )
-
         if not np.isfinite(pred) or pred <= 0:
             st.warning(
                 "Chưa ước lượng được mức giá hợp lệ cho tổ hợp thông tin này. "
@@ -270,6 +262,10 @@ with tab3:
                     "CV R² (std)": f"±{metrics['cv_r2_std']:.3f}",
                     "CV MAE (tỷ)": f"{metrics['cv_mae']:.3f}",
                     "Test MAE (tỷ)": f"{metrics['test_mae']:.3f}",
+                    "CV RMSE (tỷ)": f"{metrics['cv_rmse']:.3f}" if "cv_rmse" in metrics else "—",
+                    "Test RMSE (tỷ)": f"{metrics['test_rmse']:.3f}" if "test_rmse" in metrics else "—",
+                    "CV MAPE (%)": f"{metrics['cv_mape']:.2f}" if "cv_mape" in metrics else "—",
+                    "Test MAPE (%)": f"{metrics['test_mape']:.2f}" if "test_mape" in metrics else "—",
                     "Best": "✅" if name == best_name else "",
                 }
             )
@@ -303,4 +299,6 @@ with tab3:
 | **CV R²** | R² trung bình qua 5 fold — đánh giá độ ổn định của model |
 | **CV R² std** | Độ lệch chuẩn R² qua các fold — thấp = model ổn định |
 | **MAE (tỷ VNĐ)** | Sai số tuyệt đối trung bình (Mean Absolute Error) |
+| **RMSE (tỷ VNĐ)** | Căn sai số bình phương trung bình, nhạy với sai số lớn |
+| **MAPE (%)** | Sai số phần trăm tuyệt đối trung bình trên giá gốc; càng thấp càng tốt, có thể vượt 100% và nhạy với giá thật rất nhỏ |
 """)

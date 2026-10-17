@@ -50,6 +50,11 @@ class WardSelectionTests(unittest.TestCase):
             "global_median_price": 20.,
             "best_model_name": "Test model",
             "best_model_mae": 2.,
+            "cv_summary": {"Test model": {
+                "test_r2": .8, "cv_r2_mean": .7, "cv_r2_std": .1,
+                "cv_mae": 2., "test_mae": 2., "cv_rmse": 3., "test_rmse": 3.,
+                "cv_mape": 12.5, "test_mape": 15.,
+            }},
         }
         frame = pd.DataFrame({
             "area": [30., 40., 50., 60.],
@@ -71,6 +76,10 @@ class WardSelectionTests(unittest.TestCase):
              patch.object(cleaning, "clean_listings", side_effect=lambda data: data):
             app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
             self.assertFalse(app.exception)
+            metric_table = next(item.value for item in app.dataframe
+                                if "Test MAPE (%)" in item.value.columns)
+            self.assertEqual(metric_table.iloc[0]["Test MAPE (%)"], "15.00")
+            self.assertEqual(metric_table.iloc[0]["CV MAPE (%)"], "12.50")
             self.assertTrue(any("2025–2026" in c.value for c in app.caption))
             self.assertEqual(app.selectbox[1].options, ["Không rõ", "W1"])
             app.button[0].click().run()

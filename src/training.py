@@ -101,6 +101,7 @@ def cross_validate(
             "cv_r2_std": float(np.std([score["r2"] for score in fold_scores])),
             "cv_mae": float(np.mean([score["mae"] for score in fold_scores])),
             "cv_rmse": float(np.mean([score["rmse"] for score in fold_scores])),
+            "cv_mape": float(np.mean([score["mape"] for score in fold_scores])),
             "fold_scores": fold_scores,
         }
         for name, fold_scores in scores.items()

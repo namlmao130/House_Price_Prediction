@@ -32,14 +32,12 @@ src/
   cleaning.py             Chuẩn hóa, kiểm tra lỗi và deduplicate
   splitting.py            Group key, chia group, tạo X/y
   preprocessing.py        HousePricePreprocessor và các phép biến đổi
-  evaluation.py           R², MAE, RMSE và định dạng log metric
+  evaluation.py           R², MAE, RMSE, MAPE và định dạng log metric
   training.py             CV, chọn model, test evaluation, final refit
   artifacts.py            Hash, snapshot source, lưu model/state/kết quả
   validation.py           Kiểm tra schema và align index
   train_model.py          main() điều phối pipeline
 tests/                    Kiểm thử leakage, edge case, artifact và giao diện
-docs/REFACTOR.md           Báo cáo thay đổi, trước/sau và checklist leakage
-docs/CODE_REFERENCE.md    Toàn bộ source theo từng file
 results/metrics.json      Kết quả của lần train hoàn tất gần nhất
 results/evaluation.csv    Giá thật và dự đoán trên test
 ```
@@ -47,7 +45,7 @@ results/evaluation.csv    Giá thật và dự đoán trên test
 ## Flow
 
 ```text
-load raw parquet → clean theo dòng → build group key → GroupShuffleSplit
+load raw parquet → clean theo dòng, loại loại BĐS Đất → build group key → GroupShuffleSplit
 → deduplicate riêng train/test → align groups_train theo index còn lại
 → tạo X/y → CV chỉ trên train → chọn model theo CV R² trung bình
 → fit preprocessing/model trên train → transform và evaluate toàn bộ test
@@ -69,6 +67,7 @@ toàn bộ train để biến đổi validation trong CV.
 ## API preprocessing
 
 ```python
+import numpy as np
 from preprocessing import HousePricePreprocessor
 
 preprocessor = HousePricePreprocessor()
@@ -92,6 +91,9 @@ giữ key cũ như `feature_cols`, `districts`, `numeric_medians`, `price_unit` 
 ## Quy tắc được giữ
 
 - Bắt buộc có giá, diện tích, quận và loại BĐS; giá và diện tích phải dương.
+- Loại dòng có `property_type_name = "Đất"` ở cleaning trước split/dedup,
+  sau chuẩn hóa Unicode, khoảng trắng, không phân biệt hoa/thường.
+  Giữ cột loại BĐS cho các loại còn lại; không xóa dữ liệu nguồn trên đĩa.
 - Bốn cột số tùy chọn được giữ NaN: phòng ngủ, phòng tắm, số tầng, mặt tiền.
   Median học từ train; có bốn feature `*_missing`.
 - Numeric âm bị loại nếu có giá trị. Inf/-inf chuyển thành missing ở cleaning.
@@ -118,18 +120,21 @@ Feature gồm 5 numeric, 4 missing indicators, 2 target encoding và one-hot.
 Không thêm `house_depth`, thời gian, `price` hay `price_per_m2` làm feature.
 Linear Regression, Random Forest và Gradient Boosting fit target `np.log1p(price_ty)`
 ở CV, train/test và refit. Dự đoán được đổi ngược bằng `np.expm1()` trước khi
-tính R²/MAE/RMSE, lưu dự đoán hoặc hiển thị trên app. OOF target encoding
+tính R²/MAE/RMSE/MAPE, lưu dự đoán hoặc hiển thị trên app. OOF target encoding
 vẫn học từ giá gốc. Results và artifacts ghi
 `target_transform = "log1p"`; cần train lại để tạo model sử dụng target mới.
 
 ## Kết quả và phiên bản
 
 R² có thể âm, không phải phần trăm chính xác. MAE/RMSE có đơn vị tỷ VNĐ.
-Không thêm MAPE vì chưa có quyết định xử lý giá rất nhỏ. Chọn model bằng
+MAPE = `100 * mean(abs((y_true - y_pred) / y_true))`, lưu theo phần trăm
+trong `fold_scores.mape`, `cv_mape` (trung bình các fold) và `test_mape`.
+Giá thật phải dương; giá rất nhỏ có thể khiến MAPE cao, không clip hoặc bỏ mẫu.
+Chọn model bằng
 CV R² trung bình trước khi đánh giá test; kết quả test không chọn model.
 
 Model triển khai được refit sau đánh giá trên toàn bộ dữ liệu khử trùng.
-R²/MAE/RMSE báo cáo thuộc model chỉ fit trên tập train của thí nghiệm; không
+R²/MAE/RMSE/MAPE báo cáo thuộc model chỉ fit trên tập train của thí nghiệm; không
 đánh giá lại test bằng model triển khai. Biên ± MAE trên app chỉ tham khảo,
 không bảo đảm mức bao phủ như khoảng tin cậy.
 
@@ -139,8 +144,8 @@ requirements; hash dữ liệu bao phủ đúng 10 shard theo thứ tự. `sourc
 là index sau đọc Hà Nội, không phải số dòng gốc trong từng shard.
 
 Sau khi xuất thành công, chỉ giữ run mới nhất. Nếu dữ liệu hoặc mã nguồn thay
-đổi giữa lúc chạy, quá trình lưu sẽ báo lỗi. Mỗi file model/latest được thay
-qua file tạm; hai file không phải một giao dịch filesystem duy nhất.
+đổi giữa lúc chạy, quá trình lưu sẽ báo lỗi. Các file model, preprocessor,
+metrics và evaluation được thay qua file tạm, không phải một giao dịch duy nhất.
 
 Refactor không ghi đè model/kết quả huấn luyện cũ bằng điểm số kiểm thử.
 Xem `version_id` và source snapshot trong artifact để biết model được tạo bởi
@@ -155,6 +160,6 @@ phiên bản nào; chạy lệnh train ở trên để tạo artifact từ code 
 - `results/evaluation.csv`: giá thật và dự đoán từng model trên test.
 - `results/runs/<version>/`: snapshot source, split và bundle để tái lập; chỉ giữ run mới nhất.
 - Dữ liệu, artifacts và results được giữ local, không track Git.
-- MAPE chưa được bật; các metric vẫn là MAE, RMSE, R².
+- Metric gồm MAE, RMSE, R² và MAPE (%), tính trên giá gốc sau `expm1()`.
 
 Chạy train từ thư mục project: `venv\Scripts\python.exe src\train_model.py`.

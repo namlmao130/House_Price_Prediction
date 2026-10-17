@@ -85,6 +85,7 @@ def build_report(
     return {
         "schema_version": 4,
         "target_transform": TARGET_TRANSFORM,
+        "mape_unit": "percent",
         "version_id": run.version_id,
         "run_id": run.run_dir.name,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),

@@ -56,6 +56,7 @@ def clean_listings(raw_df: pd.DataFrame) -> pd.DataFrame:
     required = ["price", "area", *CATEGORICAL_COLUMNS]
     valid = (
         cleaned[required].notna().all(axis=1)
+        & ~cleaned["property_type_name"].str.casefold().eq("đất").fillna(False)
         & cleaned["price"].gt(0)
         & cleaned["area"].gt(0)
         & ~cleaned[NUMERIC_COLUMNS].lt(0).any(axis=1)

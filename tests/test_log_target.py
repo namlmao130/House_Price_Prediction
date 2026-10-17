@@ -70,6 +70,10 @@ class LogTargetTests(unittest.TestCase):
             expected = evaluate_regression(self.y.iloc[valid], predictions)
             for metric, value in expected.items():
                 self.assertAlmostEqual(self.result.metrics[name]["fold_scores"][0][metric], value)
+            self.assertAlmostEqual(
+                self.result.metrics[name]["cv_mape"],
+                np.mean([fold["mape"] for fold in self.result.metrics[name]["fold_scores"]]),
+            )
 
     def test_refit_all_models_uses_log_target(self):
         for name, estimator in self.models.items():
