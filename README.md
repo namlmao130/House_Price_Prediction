@@ -62,9 +62,8 @@ tab *Đánh giá mô hình* của app.
 - **Giá chào bán, không phải giá giao dịch.** Giá thật khi chốt thường thấp hơn.
 - **Chỉ Hà Nội, không có đất.** Dòng `property_type_name = "Đất"` bị loại; app chỉ
   định giá nhà, biệt thự/nhà liền kề, shophouse và căn hộ chung cư.
-- **Ít đặc trưng.** Chỉ có 5 biến số, quận, phường và loại bất động sản. Không có tọa
-  độ, hướng nhà, pháp lý, khoảng cách tới trung tâm hay độ rộng ngõ — những yếu tố
-  ảnh hưởng mạnh đến giá nhà phố.
+- **Ít đặc trưng.** 5 biến số, quận, phường và loại bất động sản. Không có tọa
+  độ, hướng nhà, pháp lý, khoảng cách tới trung tâm hay độ rộng ngõ do dữ liệu missing khá nhiều.
 - **Test được lọc bằng quy tắc có dùng giá.** Các tin có đơn giá dưới 3 triệu/m² hoặc
   trên 4 tỷ/m² bị loại trước khi chia tập, nên điểm số mô tả chất lượng trên dữ liệu
   đã làm sạch chứ không phải mọi tin đăng thực tế.
@@ -87,12 +86,12 @@ python -m venv venv
 venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m unittest discover -s tests -v
-python src\train_model.py
+python src\train_model.py (nếu muốn tự train lại)
 streamlit run app.py
 ```
 
-Đặt đủ `shard_0000.parquet` đến `shard_0009.parquet` trong
-`data/parquet_dataset/`. Loader lọc Hà Nội ngay trong PyArrow và chỉ đọc 10 cột
+Tạo 1 thư mục "data" ngay trong "du_doan_gia_nha" và đặt đủ `shard_0000.parquet` đến `shard_0009.parquet` đúng theo
+`data/parquet_dataset/shard_0000->0009`. Loader lọc Hà Nội ngay trong PyArrow và chỉ đọc 10 cột
 cần dùng. Không tự tải dữ liệu hoặc thêm feature.
 
 Repository không bao gồm các file dữ liệu vì dung lượng lớn. Có thể tải dữ liệu
