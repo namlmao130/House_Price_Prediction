@@ -9,3 +9,6 @@ __pycache__/
 data/parquet_dataset/
 data/*.csv
 results/
+output
+agent
+tmp
